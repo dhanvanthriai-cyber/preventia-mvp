@@ -1,0 +1,3 @@
+# Flyway picks up V*.sql files from this directory.
+# Production migrations live here — never edit a committed migration.
+# Use V2__, V3__ etc. for subsequent schema changes.

@@ -1,0 +1,116 @@
+version: "3.9"
+
+# ============================================================
+# Project Dhanvanthri — Local Development Stack
+# Oracle VM (aarch64 / Ubuntu 22.04) — Docker Compose v2
+#
+# Usage:
+#   cp .env.example .env        # fill in secrets
+#   docker compose up -d        # start all services
+#   docker compose logs -f app  # follow Spring Boot logs
+#
+# Memory budget (6 GB Oracle VM):
+#   postgres  512 MB
+#   redis     256 MB
+#   app      1536 MB
+#   ─────────────────
+#   total   ~2304 MB  (~3.7 GB left for OS + overhead)
+# ============================================================
+
+services:
+
+  # ----------------------------------------------------------
+  # PostgreSQL 16 — Primary relational store (PHI)
+  # ----------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: dhanvanthri-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       dhanvanthri_db
+      POSTGRES_USER:     dhan_dev
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dhan_dev -d dhanvanthri_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  # ----------------------------------------------------------
+  # Redis 7 — Session cache + rate-limit counters
+  # ----------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: dhanvanthri-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
+  # ----------------------------------------------------------
+  # Spring Boot App — Dhanvanthri monolith
+  # Requires a Dockerfile at project root (see next-steps).
+  # ----------------------------------------------------------
+  app:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    container_name: dhanvanthri-app
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      # --- JVM tuning (must stay within the 1536m container limit) ---
+      JAVA_OPTS: "-Xms256m -Xmx1280m"
+      # --- Database ---
+      SPRING_DATASOURCE_URL:      jdbc:postgresql://postgres:5432/dhanvanthri_db
+      SPRING_DATASOURCE_USERNAME: dhan_dev
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      # --- Redis ---
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      # --- App secrets ---
+      JWT_SECRET:         ${JWT_SECRET}
+      JWT_EXPIRY_SECONDS: ${JWT_EXPIRY_SECONDS}
+      # --- Flyway (auto-runs migrations on startup) ---
+      SPRING_FLYWAY_ENABLED: "true"
+      # --- Logging ---
+      LOGGING_LEVEL_ROOT: ${LOG_LEVEL:-INFO}
+    deploy:
+      resources:
+        limits:
+          memory: 1536m
+
+# ----------------------------------------------------------
+# Named Volumes
+# ----------------------------------------------------------
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local

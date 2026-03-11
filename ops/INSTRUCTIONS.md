@@ -1,0 +1,1 @@
+Prompt/Logic: "Focus on the 'NRI Bridge' feature—automated updates for children in the US/UK when their parents' blood samples are collected. Use openclaw search to find the current API docs for major Indian lab chains (Dr. Lal PathLabs, Metropolis)."

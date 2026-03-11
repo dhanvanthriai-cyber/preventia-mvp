@@ -1,0 +1,1 @@
+Prompt/Logic: "When generating Spring Boot controllers, always include JUnit 5 tests. Use MapStruct for DTO mapping. If a feature involves Indian health data, ensure the ABHA (Ayushman Bharat) integration flow is considered."

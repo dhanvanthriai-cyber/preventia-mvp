@@ -1,7 +1,9 @@
 package com.dhanvanthri.pharmacy.controller;
 
 import com.dhanvanthri.pharmacy.domain.Medication;
+import com.dhanvanthri.pharmacy.dto.InventoryAlertSummary;
 import com.dhanvanthri.pharmacy.dto.InventoryUpdateRequest;
+import com.dhanvanthri.pharmacy.dto.MedicationResponse;
 import com.dhanvanthri.pharmacy.service.InventoryService;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -30,5 +32,24 @@ public class PharmacyController {
         @RequestParam(defaultValue = "false") boolean force
     ) {
         return inventoryService.updateInventory(request, force);
+    }
+
+    // -------------------------------------------------------------------------
+    // GET /api/v1/patients/{patientId}/medications/alerts
+    // -------------------------------------------------------------------------
+
+    /**
+     * Returns a refill alert summary for a patient.
+     *
+     * Accessible to SPONSOR (NRI family member), DOCTOR, and PHARMACIST.
+     * Includes counts of WARNING (4–7 days) and CRITICAL (≤ 3 days) medications.
+     *
+     * @param patientId DB ID of the target patient
+     * @return {@link InventoryAlertSummary} with warningCount and criticalCount
+     */
+    @GetMapping("/api/v1/patients/{patientId}/medications/alerts")
+    @PreAuthorize("hasAnyRole('SPONSOR','DOCTOR','PHARMACIST')")
+    public InventoryAlertSummary getMedicationAlerts(@PathVariable Long patientId) {
+        return inventoryService.getAlertSummary(patientId);
     }
 }

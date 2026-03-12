@@ -55,7 +55,13 @@ logging:
     com.dhanvanthri: INFO
     org.springframework.security: WARN
 
+daily:
+  api-key: ${DAILY_API_KEY}                   # Daily.co REST API key — never log or expose
+  webhook-secret: ${DAILY_WEBHOOK_SECRET}     # HMAC-SHA256 shared secret for webhook validation
+
 aws:
   region: ${AWS_REGION:ap-south-1}
+  access-key-id: ${AWS_ACCESS_KEY_ID}
+  secret-access-key: ${AWS_SECRET_ACCESS_KEY}
   s3:
     bucket-name: ${S3_BUCKET_NAME:dhanvanthri-mvp-prescriptions}

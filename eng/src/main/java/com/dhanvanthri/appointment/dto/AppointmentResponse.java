@@ -7,6 +7,13 @@ import java.time.OffsetDateTime;
 /**
  * Outbound DTO returned to API callers after appointment operations.
  * Derived from the {@link com.dhanvanthri.appointment.domain.Appointment} entity.
+ *
+ * Token fields (doctorToken, recipientToken, sponsorToken) are populated
+ * ONLY on creation (POST /api/v1/appointments). They are null on all
+ * subsequent responses. Callers must store tokens immediately — they
+ * cannot be retrieved again from this API.
+ *
+ * sponsorToken is null when no NRI sponsor is linked to the appointment.
  */
 public record AppointmentResponse(
         Long id,
@@ -18,5 +25,10 @@ public record AppointmentResponse(
         String dailyRoomUrl,
         String dailyRoomName,
         AppointmentStatus status,
-        OffsetDateTime createdAt
+        OffsetDateTime createdAt,
+
+        // Populated on creation only — null for state-transition responses
+        String doctorToken,
+        String recipientToken,
+        String sponsorToken     // null when no NRI sponsor on this appointment
 ) {}

@@ -102,6 +102,8 @@ public class Appointment {
     public AppointmentStatus getStatus()      { return status; }
     public OffsetDateTime getCreatedAt()      { return createdAt; }
 
-    public void setStatus(AppointmentStatus status) { this.status = status; }
-    public void setSponsorId(Long sponsorId)        { this.sponsorId = sponsorId; }
+    public void setStatus(AppointmentStatus status)       { this.status = status; }
+    public void setSponsorId(Long sponsorId)               { this.sponsorId = sponsorId; }
+    public void setDailyRoomUrl(String dailyRoomUrl)       { this.dailyRoomUrl = dailyRoomUrl; }
+    public void setDailyRoomName(String dailyRoomName)     { this.dailyRoomName = dailyRoomName; }
 }

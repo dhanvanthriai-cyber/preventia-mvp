@@ -54,3 +54,8 @@ logging:
   level:
     com.dhanvanthri: INFO
     org.springframework.security: WARN
+
+aws:
+  region: ${AWS_REGION:ap-south-1}
+  s3:
+    bucket-name: ${S3_BUCKET_NAME:dhanvanthri-mvp-prescriptions}

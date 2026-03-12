@@ -53,6 +53,18 @@ public class AppointmentController {
         return ResponseEntity.ok(appointmentService.activateAppointment(id));
     }
 
+    @PutMapping("/api/v1/appointments/{id}/complete")
+    @PreAuthorize("hasAnyRole('DOCTOR','SPONSOR')")
+    public ResponseEntity<AppointmentResponse> completeAppointment(@PathVariable Long id) {
+        return ResponseEntity.ok(appointmentService.completeAppointment(id));
+    }
+
+    @PutMapping("/api/v1/appointments/{id}/lock")
+    @PreAuthorize("hasRole('DOCTOR')")
+    public ResponseEntity<AppointmentResponse> lockAppointment(@PathVariable Long id) {
+        return ResponseEntity.ok(appointmentService.lockAppointment(id));
+    }
+
     // -------------------------------------------------------------------------
     // Daily.co webhook — public, no authentication required
     // -------------------------------------------------------------------------

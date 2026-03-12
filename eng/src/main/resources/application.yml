@@ -41,6 +41,15 @@ management:
     health:
       show-details: never          # Never expose DB details publicly
 
+stripe:
+  api:
+    key: ${STRIPE_API_KEY:STUB}
+
+razorpay:
+  api:
+    key: ${RAZORPAY_API_KEY:STUB}
+    secret: ${RAZORPAY_API_SECRET:STUB}
+
 logging:
   level:
     com.dhanvanthri: INFO

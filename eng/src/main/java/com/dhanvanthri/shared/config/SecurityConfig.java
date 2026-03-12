@@ -91,7 +91,10 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/v1/auth/**").permitAll()
                 .requestMatchers("/actuator/health").permitAll()
-                .requestMatchers("/api/v1/webhook/daily").permitAll()  // Daily.co webhook — no JWT
+                .requestMatchers("/api/v1/webhook/daily").permitAll()    // Daily.co webhook — no JWT
+                .requestMatchers("/api/v1/webhook/lab").permitAll()     // Thyrocare lab webhook — no JWT
+                .requestMatchers("/api/v1/webhook/stripe").permitAll()  // Stripe payment webhook — no JWT
+                .requestMatchers("/api/v1/webhook/razorpay").permitAll() // Razorpay payment webhook — no JWT
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)

@@ -1,20 +1,21 @@
-version: "3.9"
-
 # ============================================================
 # Project Dhanvanthri — Local Development Stack
-# Oracle VM (aarch64 / Ubuntu 22.04) — Docker Compose v2
+# macOS — Podman Desktop (podman compose)
 #
 # Usage:
-#   cp .env.example .env        # fill in secrets
-#   docker compose up -d        # start all services
-#   docker compose logs -f app  # follow Spring Boot logs
+#   cp .env.example .env          # fill in secrets (already done)
+#   podman machine start          # start Podman VM (once per reboot)
+#   podman compose up --build -d  # build image + start all services
+#   podman compose logs -f app    # follow Spring Boot logs
+#   podman compose down           # stop all services
+#   podman compose down -v        # stop + wipe DB volumes (clean slate)
 #
-# Memory budget (6 GB Oracle VM):
+# Memory budget (macOS Podman VM default 2 GB):
 #   postgres  512 MB
 #   redis     256 MB
-#   app      1536 MB
+#   app      1024 MB
 #   ─────────────────
-#   total   ~2304 MB  (~3.7 GB left for OS + overhead)
+#   total   ~1792 MB
 # ============================================================
 
 services:
@@ -23,7 +24,7 @@ services:
   # PostgreSQL 16 — Primary relational store (PHI)
   # ----------------------------------------------------------
   postgres:
-    image: postgres:16-alpine
+    image: docker.io/library/postgres:16-alpine
     container_name: dhanvanthri-postgres
     restart: unless-stopped
     environment:
@@ -31,45 +32,39 @@ services:
       POSTGRES_USER:     dhan_dev
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    mem_limit: 512m
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U dhan_dev -d dhanvanthri_db"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 15s
-    deploy:
-      resources:
-        limits:
-          memory: 512m
 
   # ----------------------------------------------------------
   # Redis 7 — Session cache + rate-limit counters
   # ----------------------------------------------------------
   redis:
-    image: redis:7-alpine
+    image: docker.io/library/redis:7-alpine
     container_name: dhanvanthri-redis
     restart: unless-stopped
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    mem_limit: 256m
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
       start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 256m
 
   # ----------------------------------------------------------
   # Spring Boot App — Dhanvanthri monolith
-  # Requires a Dockerfile at project root (see next-steps).
+  # Built via multi-stage Dockerfile (Maven → JRE)
   # ----------------------------------------------------------
   app:
     build:
@@ -84,9 +79,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    mem_limit: 1024m
     environment:
-      # --- JVM tuning (must stay within the 1536m container limit) ---
-      JAVA_OPTS: "-Xms256m -Xmx1280m"
+      # --- JVM tuning ---
+      JAVA_OPTS: "-Xms256m -Xmx768m"
       # --- Database ---
       SPRING_DATASOURCE_URL:      jdbc:postgresql://postgres:5432/dhanvanthri_db
       SPRING_DATASOURCE_USERNAME: dhan_dev
@@ -99,12 +95,20 @@ services:
       JWT_EXPIRY_SECONDS: ${JWT_EXPIRY_SECONDS}
       # --- Flyway (auto-runs migrations on startup) ---
       SPRING_FLYWAY_ENABLED: "true"
+      # --- Daily.co ---
+      DAILY_API_KEY:        ${DAILY_API_KEY:-STUB}
+      DAILY_WEBHOOK_SECRET: ${DAILY_WEBHOOK_SECRET:-STUB}
+      # --- AWS / S3 ---
+      AWS_ACCESS_KEY_ID:     ${AWS_ACCESS_KEY_ID:-STUB}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-STUB}
+      AWS_REGION:            ${AWS_REGION:-ap-south-1}
+      S3_BUCKET_NAME:        ${S3_BUCKET_NAME:-dhanvanthri-mvp-prescriptions}
+      # --- Payment gateways ---
+      STRIPE_API_KEY:         ${STRIPE_API_KEY:-STUB}
+      RAZORPAY_API_KEY:       ${RAZORPAY_API_KEY:-STUB}
+      RAZORPAY_API_SECRET:    ${RAZORPAY_API_SECRET:-STUB}
       # --- Logging ---
       LOGGING_LEVEL_ROOT: ${LOG_LEVEL:-INFO}
-    deploy:
-      resources:
-        limits:
-          memory: 1536m
 
 # ----------------------------------------------------------
 # Named Volumes

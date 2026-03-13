@@ -1,13 +1,20 @@
 # =============================================================================
 # Project Dhanvanthri — Multi-Stage Dockerfile
 # Stage 1 builds a fat JAR via Maven; Stage 2 runs it on a lean JRE image.
-# Expected runtime image size: ~250–300 MB (eclipse-temurin:21-jre base).
+#
+# Images pulled from:
+#   docker.io/library/maven:3.9-eclipse-temurin-21   (build stage)
+#   docker.io/library/eclipse-temurin:21-jre          (runtime stage)
+#
+# If you hit Docker Hub rate limits / auth errors, log in once:
+#   podman login docker.io
+# Or set REGISTRY=quay.io and use the quay mirrors below.
 # =============================================================================
 
 # ---------------------------------------------------------------------------
 # Stage 1: Build
 # ---------------------------------------------------------------------------
-FROM maven:3.9-eclipse-temurin-21 AS build
+FROM docker.io/library/maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /app
 
 # Copy POM first so dependency layer is cached independently of source changes
@@ -20,7 +27,7 @@ RUN mvn clean package -DskipTests -B
 # ---------------------------------------------------------------------------
 # Stage 2: Runtime (lean JRE only — no JDK, no Maven)
 # ---------------------------------------------------------------------------
-FROM eclipse-temurin:21-jre
+FROM docker.io/library/eclipse-temurin:21-jre
 WORKDIR /app
 
 # Non-root user for security (no login shell, no home dir)
@@ -33,5 +40,5 @@ USER dhanvanthri
 
 EXPOSE 8080
 
-# $JAVA_OPTS allows runtime tuning (heap, GC flags, Secrets Manager agent, etc.)
+# $JAVA_OPTS allows runtime tuning (heap, GC flags, etc.)
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

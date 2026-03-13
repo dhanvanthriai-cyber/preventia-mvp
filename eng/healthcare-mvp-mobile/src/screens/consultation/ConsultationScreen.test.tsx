@@ -12,10 +12,10 @@ import { ConsultationScreen } from './ConsultationScreen';
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
 /**
- * Mock @daily-co/react-native-daily-js so the test environment
+ * Mock @daily-co/daily-js so the test environment
  * doesn't need a native Daily.co module.
  */
-jest.mock('@daily-co/react-native-daily-js', () => {
+jest.mock('@daily-co/daily-js', () => {
   const createCallObject = jest.fn(() => ({
     join: jest.fn().mockResolvedValue(undefined),
     leave: jest.fn().mockResolvedValue(undefined),

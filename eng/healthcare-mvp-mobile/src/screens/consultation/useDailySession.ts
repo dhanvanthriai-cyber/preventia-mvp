@@ -2,19 +2,15 @@
  * useDailySession.ts
  * Project Dhanvanthri — Daily.co session management hook
  *
- * Wraps @daily-co/react-native-daily-js join/leave lifecycle.
+ * Uses @daily-co/daily-js (web SDK — works in Expo web + Expo Go).
  * Handles participant events and calls backend appointment endpoints:
  *   PUT /api/v1/appointments/{id}/activate  — on local join
  *   PUT /api/v1/appointments/{id}/complete  — on call end or all leave
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-// @ts-ignore — daily-co types; library ships its own .d.ts in full install
-import Daily, {
-  DailyCall,
-  DailyEvent,
-  DailyParticipant,
-} from '@daily-co/react-native-daily-js';
+import Daily from '@daily-co/daily-js';
+import type { DailyCall, DailyParticipant, DailyEvent } from '@daily-co/daily-js';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

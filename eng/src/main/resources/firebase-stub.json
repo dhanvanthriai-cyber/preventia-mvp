@@ -1,0 +1,14 @@
+{
+  "_comment": "STUB — replace with real Firebase service account key for push notifications",
+  "_instructions": "Download from: console.firebase.google.com → Project Settings → Service accounts → Generate new private key",
+  "_target_path": "eng/src/main/resources/firebase-credentials.json",
+  "type": "service_account",
+  "project_id": "STUB",
+  "private_key_id": "STUB",
+  "private_key": "STUB",
+  "client_email": "STUB@STUB.iam.gserviceaccount.com",
+  "client_id": "STUB",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token"
+}
+

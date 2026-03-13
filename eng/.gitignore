@@ -7,3 +7,9 @@ target/
 .idea/
 *.iml
 node_modules/
+
+# Firebase service account key — NEVER commit this
+*firebase-adminsdk*.json
+firebase-credentials.json
+src/main/resources/firebase-credentials.json
+

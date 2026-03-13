@@ -1,0 +1,22 @@
+{
+  "name": "@dhanvanthri/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Platform-agnostic shared logic for Project Dhanvanthri",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "type-check": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.79",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

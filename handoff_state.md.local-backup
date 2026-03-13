@@ -1,0 +1,31 @@
+💾 DHANVANTHRI MVP: STATE-FILE (v1.1)
+Project Context: Healthcare MVP for NRI-to-Parent care.
+Architecture: Java 21 / Spring Boot 3.2 / PostgreSQL 16 / Docker / AWS S3.
+Environment: Oracle VM (6GB RAM) + Local Mac (Sync via GitHub).
+
+📍 Current Progress (22%)
+[x] Phase 1 (Foundation): Spring Boot scaffolded, PostgreSQL & Redis via Docker.
+
+[x] Auth Layer: JWT + RBAC (Sponsor, Recipient, Doctor, Pharmacist) complete.
+
+[x] S3 Storage: Bucket created in ap-south-1. IAM user dhanvanthri-app verified via CLI.
+
+[x] Git/Sync: SSH Identity Routing configured for dhanvanthriai-cyber account.
+
+🛠 Active Configuration
+GitHub Alias: github-dhanvanthri
+
+S3 Bucket: dhanvanthri-mvp-prescriptions
+
+Database: dhanvanthri_db (user: dhan_dev)
+
+Aesthetic: Neo-Brutalist Wellness (2px black borders, monospace data).
+
+🚀 Phase 2: Next Immediate Actions (The "Clinical Bridge")
+@eng: Implement S3Service.java using the verified .env credentials.
+
+@eng: Scaffold Appointment module and integrate Daily.co for video rooms.
+
+@ops: Document the notification state machine in WORKFLOWS.md (Dual-Hemisphere logic).
+
+Security: Implement the "Session Lock" (EMR write-access only during active appointments).

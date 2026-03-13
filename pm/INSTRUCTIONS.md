@@ -8,3 +8,4 @@
    - **Technical Blockers:** (Any issues found)
    - **Progress Percentage:** (e.g., 15% of MVP)
    - **Next Immediate Action:** (What is happening next?)
+4. Monitor the session token count. If the session history exceeds 15,000 tokens, alert the user and suggest a 'Summary Handoff.' You will then write a concise state-file of our progress and initiate a /clear to reset the cost-per-turn.

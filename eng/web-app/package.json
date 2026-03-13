@@ -15,7 +15,9 @@
     "@dhanvanthri/shared": "file:../shared",
     "next": "14.2.3",
     "react": "18.3.1",
-    "react-dom": "18.3.1"
+    "react-dom": "18.3.1",
+    "stream-chat": "^8.40.0",
+    "stream-chat-react": "^12.8.0"
   },
   "devDependencies": {
     "@types/node": "^20.12.7",

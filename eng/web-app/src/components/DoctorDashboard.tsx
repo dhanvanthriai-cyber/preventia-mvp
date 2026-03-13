@@ -14,6 +14,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import type { Appointment, AuthUser } from '@dhanvanthri/shared';
 import { getAppointments } from '@dhanvanthri/shared';
+import ChatPanel from './ChatPanel';
 
 interface Props {
   user?: AuthUser;
@@ -164,29 +165,12 @@ export default function DoctorDashboard({ user }: Props) {
             ))}
           </div>
 
-          {/* Network */}
+          {/* Stream Chat — replaces static Peer Contacts */}
           <div style={styles.section}>
-            <span style={styles.sectionLabel}>NETWORK</span>
-            <input
-              type="text"
-              placeholder="Search colleagues…"
-              style={styles.searchInput}
-            />
-            {MOCK_CONTACTS.map(c => (
-              <div key={c.id} style={styles.contactRow}>
-                <span style={{
-                  ...styles.onlineDot,
-                  backgroundColor: c.online ? '#22C55E' : '#ccc',
-                }} />
-                <div style={styles.contactInfo}>
-                  <span style={styles.contactName}>{c.name}</span>
-                  <span style={styles.contactSpec}>{c.specialty}</span>
-                </div>
-                <button style={styles.iconBtn}>✉</button>
-                <button style={styles.iconBtn}>📞</button>
-              </div>
-            ))}
-            <button style={styles.outlineBtn}>OPEN FULL INBOX</button>
+            <span style={{ ...styles.sectionLabel, ...styles.greenAccent }}>
+              PEER MESSAGES
+            </span>
+            <ChatPanel userId={user?.userId} userName={user?.name} />
           </div>
         </div>
 

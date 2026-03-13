@@ -57,6 +57,10 @@ razorpay:
     secret: ${RAZORPAY_API_SECRET:STUB}
   webhook-secret: ${RAZORPAY_WEBHOOK_SECRET:STUB}
 
+stream:
+  api-key: ${STREAM_API_KEY:STUB_KEY}
+  api-secret: ${STREAM_API_SECRET:STUB_SECRET}
+
 logging:
   level:
     com.dhanvanthri: INFO

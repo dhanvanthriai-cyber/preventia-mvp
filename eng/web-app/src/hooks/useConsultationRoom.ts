@@ -3,11 +3,15 @@
  * useConsultationRoom — Daily.co room lifecycle hook (web)
  *
  * Joins a Daily.co room with the doctorToken, listens for:
- *  - meeting-joined  → sets state to ACTIVE (belt+suspenders, backend already does this)
- *  - meeting-ended   → calls completeAppointment() → sets local status to LOCKED
- *  - participant-updated, etc.
+ *  - joined-meeting  → sets state to ACTIVE
+ *  - left-meeting    → calls completeAppointment() → sets local status to LOCKED
+ *  - participant-updated → tracks participant count
  *
- * No HMAC here — that's the backend's job. We just react to SDK events.
+ * startCamera() is called immediately after createCallObject() to request
+ * camera/mic permissions early — before the user clicks JOIN — so the
+ * browser permission prompt does not interrupt the join flow.
+ *
+ * No HMAC here — that's the backend's job.
  */
 import { useEffect, useRef, useState, useCallback } from 'react';
 import DailyIframe, { DailyCall } from '@daily-co/daily-js';
@@ -44,6 +48,27 @@ export function useConsultationRoom(
       const co = DailyIframe.createCallObject();
       callRef.current = co;
 
+      // ── Initialize media devices immediately after createCallObject ──────────
+      // This triggers the browser camera/mic permission prompt before join()
+      // so the user grants access up-front rather than mid-join.
+      try {
+        await co.startCamera();
+      } catch (permErr) {
+        // Permission denied or device unavailable — surface as styled error banner
+        const msg =
+          (permErr as { errorMsg?: string })?.errorMsg ??
+          (permErr instanceof Error ? permErr.message : String(permErr));
+        setState(s => ({
+          ...s,
+          error: `Camera / microphone access denied: ${msg}. Please allow permissions and try again.`,
+          roomStatus: 'IDLE',
+        }));
+        callRef.current?.destroy();
+        callRef.current = null;
+        return;
+      }
+
+      // ── Event listeners ──────────────────────────────────────────────────────
       co.on('joined-meeting', () => {
         setState(s => ({ ...s, roomStatus: 'ACTIVE', callObject: co }));
       });
@@ -61,7 +86,8 @@ export function useConsultationRoom(
       });
 
       co.on('error', (ev) => {
-        setState(s => ({ ...s, error: String((ev as { errorMsg?: string })?.errorMsg ?? 'Daily.co error'), roomStatus: 'IDLE' }));
+        const msg = String((ev as { errorMsg?: string })?.errorMsg ?? 'Daily.co error');
+        setState(s => ({ ...s, error: msg, roomStatus: 'IDLE' }));
       });
 
       co.on('participant-updated', () => {
@@ -72,6 +98,8 @@ export function useConsultationRoom(
       await co.join({ url: roomUrl, token: doctorToken });
     } catch (e) {
       setState(s => ({ ...s, error: String(e), roomStatus: 'IDLE' }));
+      callRef.current?.destroy();
+      callRef.current = null;
     }
   }, [roomUrl, doctorToken, appointmentId]);
 
@@ -79,6 +107,7 @@ export function useConsultationRoom(
     await callRef.current?.leave();
   }, []);
 
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       callRef.current?.destroy();

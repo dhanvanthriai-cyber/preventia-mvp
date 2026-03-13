@@ -89,7 +89,7 @@ public class SecurityConfig {
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authenticationProvider(daoAuthenticationProvider())
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/v1/auth/**").permitAll()
+                .requestMatchers("/api/v1/auth/**").permitAll()      // login, register, refresh
                 .requestMatchers("/actuator/health").permitAll()
                 .requestMatchers("/api/v1/webhook/daily").permitAll()    // Daily.co webhook (legacy path)
                 .requestMatchers("/webhooks/daily").permitAll()          // Daily.co HMAC-verified webhook — no JWT

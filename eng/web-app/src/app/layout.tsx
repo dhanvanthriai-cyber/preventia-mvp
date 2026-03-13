@@ -39,6 +39,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           </strong>
           <a href="/doctor"      style={navLink}>Doctor Portal</a>
           <a href="/pharmacist"  style={navLink}>Pharmacist Portal</a>
+          <a href="/sponsor"     style={navLink}>Sponsor Portal</a>
 
           {/* Spacer */}
           <span style={{ flex: 1 }} />

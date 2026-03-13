@@ -23,6 +23,7 @@ export type RootStackParamList = {
   PatientPortal: undefined;
   DoctorPortal: undefined;
   PharmacyPortal: undefined;
+  SponsorPortal: undefined;
 };
 
 // ─── Patient portal ───────────────────────────────────────────────────────────
@@ -57,5 +58,19 @@ export type PharmacyTabParamList = {
   RxQueue: undefined;
   Catalog: undefined;
   Profile: undefined;
+};
+
+// ─── Sponsor portal ───────────────────────────────────────────────────────────
+
+export type SponsorStackParamList = {
+  SponsorDashboard: undefined;
+  BookAppointment:  undefined;
+  Payment: {
+    orderId:       string;
+    amount:        number;   // paise (e.g. 250000 = ₹2,500)
+    currency:      string;
+    description:   string;
+    appointmentId: number;
+  };
 };
 

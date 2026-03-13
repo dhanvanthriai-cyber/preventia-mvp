@@ -20,6 +20,9 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     /** Looks up a payment by the gateway's own payment ID (e.g. Stripe pi_xxx, Razorpay pay_xxx) */
     Optional<Payment> findByGatewayPaymentId(String gatewayPaymentId);
 
+    /** Looks up a payment by its Razorpay order ID (e.g. order_xxx) */
+    Optional<Payment> findByGatewayOrderId(String gatewayOrderId);
+
     /** All payments for a payer filtered by lifecycle status */
     List<Payment> findByPayerIdAndStatus(Long payerId, PaymentStatus status);
 

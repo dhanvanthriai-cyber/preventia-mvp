@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Colors, Spacing, Typography } from '../../theme/theme';
 import { AuthUser } from '@dhanvanthri/shared';
+import PaymentScreen from './PaymentScreen';
 
 const API_BASE = process.env.REACT_NATIVE_API_BASE_URL ?? 'http://localhost:8080';
 
@@ -31,6 +32,13 @@ export const BookAppointmentScreen: React.FC<Props> = ({ user, onSuccess, onCanc
   const [endTime, setEndTime]             = useState('');
   const [loading, setLoading]             = useState(false);
   const [error, setError]                 = useState<string | null>(null);
+  const [pendingPayment, setPendingPayment] = useState<{
+    orderId: string;
+    amount: number;
+    appointmentId: number;
+    roomUrl: string;
+    sponsorToken: string;
+  } | null>(null);
 
   const handleBook = async () => {
     if (!recipientId || !doctorId || !startTime || !endTime) {
@@ -54,11 +62,40 @@ export const BookAppointmentScreen: React.FC<Props> = ({ user, onSuccess, onCanc
       });
       if (!res.ok) throw new Error(`Booking failed: ${res.status}`);
       const appt = await res.json();
-      onSuccess(appt.id, appt.dailyRoomUrl, appt.sponsorToken ?? '');
+      if (appt.razorpayOrderId && !appt.razorpayOrderId.startsWith('order_STUB_')) {
+        setPendingPayment({
+          orderId: appt.razorpayOrderId,
+          amount: appt.consultationFeeInPaise ?? 0,
+          appointmentId: appt.id,
+          roomUrl: appt.dailyRoomUrl,
+          sponsorToken: appt.sponsorToken ?? '',
+        });
+      } else {
+        onSuccess(appt.id, appt.dailyRoomUrl, appt.sponsorToken ?? '');
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Booking failed.');
     } finally { setLoading(false); }
   };
+
+  if (pendingPayment) {
+    return (
+      <PaymentScreen
+        orderId={pendingPayment.orderId}
+        amount={pendingPayment.amount}
+        currency="INR"
+        description={`Consultation #${pendingPayment.appointmentId}`}
+        appointmentId={pendingPayment.appointmentId}
+        onSuccess={(_paymentId) => {
+          onSuccess(pendingPayment.appointmentId, pendingPayment.roomUrl, pendingPayment.sponsorToken);
+        }}
+        onCancel={() => {
+          setPendingPayment(null);
+          setError('Appointment booked but payment was not completed. Pay later from your dashboard.');
+        }}
+      />
+    );
+  }
 
   return (
     <SafeAreaView style={s.root}>

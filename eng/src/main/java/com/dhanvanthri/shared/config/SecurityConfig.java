@@ -96,6 +96,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/webhook/lab").permitAll()     // Thyrocare lab webhook — no JWT
                 .requestMatchers("/api/v1/webhook/stripe").permitAll()  // Stripe payment webhook — no JWT
                 .requestMatchers("/api/v1/webhook/razorpay").permitAll() // Razorpay payment webhook — no JWT
+                .requestMatchers("/webhooks/razorpay").permitAll()       // Razorpay HMAC-verified webhook — live path
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)

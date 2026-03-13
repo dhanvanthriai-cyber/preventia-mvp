@@ -174,6 +174,24 @@ public class PaymentService {
         log.info("Razorpay payment CAPTURED: id={} gatewayPaymentId={}", payment.getId(), gatewayPaymentId);
     }
 
+    /**
+     * Called by the Razorpay HMAC-verified webhook on {@code payment.captured}.
+     * Looks up the pending Payment by Razorpay order ID, stamps the payment ID,
+     * and transitions status to CAPTURED.
+     *
+     * @param gatewayOrderId   Razorpay order ID (order_xxx)
+     * @param gatewayPaymentId Razorpay payment ID (pay_xxx)
+     */
+    @Transactional
+    public void markPaid(String gatewayOrderId, String gatewayPaymentId) {
+        paymentRepository.findByGatewayOrderId(gatewayOrderId).ifPresentOrElse(payment -> {
+            payment.setGatewayPaymentId(gatewayPaymentId);
+            payment.setStatus(PaymentStatus.CAPTURED);
+            paymentRepository.save(payment);
+            log.info("Razorpay payment CAPTURED: orderId={} paymentId={}", gatewayOrderId, gatewayPaymentId);
+        }, () -> log.warn("Razorpay webhook: no payment found for orderId={}", gatewayOrderId));
+    }
+
     // ─── Mapper ───────────────────────────────────────────────────────────────
 
     private PaymentResponse toResponse(Payment payment, String clientSecret) {

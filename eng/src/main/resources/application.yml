@@ -55,6 +55,7 @@ razorpay:
   api:
     key: ${RAZORPAY_API_KEY:STUB}
     secret: ${RAZORPAY_API_SECRET:STUB}
+  webhook-secret: ${RAZORPAY_WEBHOOK_SECRET:STUB}
 
 logging:
   level:

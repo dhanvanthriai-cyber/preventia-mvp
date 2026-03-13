@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import './globals.css';
+import '../lib/apiClient';
 
 export const metadata: Metadata = {
   title: 'Dhanvanthri Portal',

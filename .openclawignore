@@ -1,0 +1,17 @@
+# Block the heavy lock files
+**/package-lock.json
+**/yarn.lock
+
+# Block the images
+**/mockups/reference-only/*.jpeg
+**/mockups/reference-only/*.png
+
+# Block old project versions
+pranascan-mvp/
+
+# Standard dev blocks
+node_modules/
+.next/
+dist/
+build/
+.git/

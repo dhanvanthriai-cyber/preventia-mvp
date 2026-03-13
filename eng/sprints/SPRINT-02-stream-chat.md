@@ -5,6 +5,49 @@
 
 ---
 
+## 🔑 Manual Setup Required BEFORE Running This Sprint
+
+**You (Satish) must complete this — agents cannot do it.**
+Estimated time: **10 minutes**.
+
+### Step 1 — Create a Stream account and app
+1. Go to **https://getstream.io** → click **Start for Free**
+2. Sign up with GitHub or email (use `dhanvanthri.ai@gmail.com`)
+3. When asked "What are you building?" → select **Chat Messaging**
+4. Give the app a name: `dhanvanthri-mvp`
+5. Select region: **Mumbai (ap-south-1)** if available, otherwise Singapore
+
+### Step 2 — Get your credentials
+1. In the Stream dashboard → **App Settings** → **Overview**
+2. Copy these two values:
+
+| What | Where in dashboard | Env var name |
+|------|--------------------|--------------|
+| **API Key** | Shown at top of Overview | `STREAM_API_KEY` |
+| **API Secret** | Click "Show Secret" button | `STREAM_API_SECRET` |
+
+### Step 3 — Add to your `.env` file
+Open `eng/.env` and add:
+```
+STREAM_API_KEY=your_key_here
+STREAM_API_SECRET=your_secret_here
+```
+
+### Step 4 — No webhook setup needed for MVP
+Stream Chat does not require a webhook for basic messaging. Webhooks are only needed for moderation/event mirroring — skip for now.
+
+### Free tier limits (more than enough for MVP)
+| Limit | Free tier |
+|-------|-----------|
+| Monthly Active Users | 100 |
+| Messages / month | Unlimited (with MAU limit) |
+| Channels | Unlimited |
+| Cost | **$0** |
+
+---
+
+---
+
 ## Pre-flight checks (run before starting)
 
 ```bash
@@ -30,15 +73,29 @@ curl http://localhost:8080/actuator/health  # must return {"status":"UP"}
 **Rules:**
 - Add to `pom.xml`:
   ```xml
+  <!-- Stream Chat server-side Java SDK -->
+  <!-- Correct artifact: io.getstream:stream-java (NOT stream-chat) -->
   <dependency>
     <groupId>io.getstream</groupId>
-    <artifactId>stream-chat</artifactId>
-    <version>6.8.0</version>
+    <artifactId>stream-java</artifactId>
+    <version>1.1.0</version>
   </dependency>
   ```
 - `StreamChatService.generateToken(Long userId, String userName, String role)`:
-  - Creates a Stream Chat user token using HMAC-SHA256 signed with `stream.api-secret`
-  - Returns signed JWT string (Stream format — NOT the app's Spring JWT)
+  - Use `io.getstream.client.Client` to create a server-side client:
+    ```java
+    Client client = Client.builder(apiKey, apiSecret).build();
+    UserToken token = client.createUserToken(userId.toString());
+    return token.getToken();
+    ```
+  - Also upsert the user on Stream so their name/role is set:
+    ```java
+    client.upsertUsers(UserRequestObject.builder()
+        .id(userId.toString())
+        .name(userName)
+        .role(role.toLowerCase())
+        .build());
+    ```
 - `GET /api/v1/chat/token` — protected by JWT auth — returns `{ token, userId, apiKey }`
 - `application.yml` additions:
   ```yaml
@@ -46,6 +103,7 @@ curl http://localhost:8080/actuator/health  # must return {"status":"UP"}
     api-key: ${STREAM_API_KEY:STUB_KEY}
     api-secret: ${STREAM_API_SECRET:STUB_SECRET}
   ```
+- If `STREAM_API_KEY` is `STUB_KEY`, return a stub token response without calling Stream (graceful local dev)
 
 ---
 
@@ -55,12 +113,17 @@ curl http://localhost:8080/actuator/health  # must return {"status":"UP"}
 - `eng/web-app/src/components/ChatPanel.tsx`
 
 **Web files to edit:**
-- `eng/web-app/package.json` (add `stream-chat`, `stream-chat-react`)
+- `eng/web-app/package.json` (add `stream-chat@^8.x`, `stream-chat-react@^12.x`)
 - `eng/web-app/src/components/DoctorDashboard.tsx` (replace right-column "Peer Contacts" with ChatPanel)
 
 **Mobile files to edit:**
 - `eng/mobile-app/src/screens/patient/PatientChatScreen.tsx` (replace MOCK_THREADS with real Stream Chat)
-- `eng/mobile-app/package.json` (add `stream-chat`, `stream-chat-expo`)
+- `eng/mobile-app/package.json` (add `stream-chat@^8.x`, `stream-chat-react-native@^5.x`)
+
+> ⚠️ **Correct package names:**
+> - Web: `stream-chat` + `stream-chat-react` (NOT stream-chat-js)
+> - Mobile: `stream-chat` + `stream-chat-react-native` (NOT stream-chat-expo)
+> - Both use the same `stream-chat` core JS SDK; only the UI layer differs
 
 **Rules for `ChatPanel.tsx` (web):**
 - Fetch Stream token from `GET /api/v1/chat/token`
@@ -71,9 +134,10 @@ curl http://localhost:8080/actuator/health  # must return {"status":"UP"}
 
 **Rules for `PatientChatScreen.tsx` (mobile):**
 - Fetch token from `GET /api/v1/chat/token` using stored JWT
-- Use `stream-chat-expo`: `<OverlayProvider>`, `<Chat>`, `<ChannelList>`
-- Tapping a thread opens full-screen `<Channel>` with `<MessageList>` + `<MessageInput>`
-- Keep existing Neo-Brutalist styles
+- Use `stream-chat-react-native`: `<OverlayProvider>`, `<Chat>`, `<ChannelList>`, `<Channel>`, `<MessageList>`, `<MessageInput>`
+- Import from `'stream-chat-react-native'` (NOT `'stream-chat-expo'`)
+- Tapping a thread navigates to a full-screen Channel view with `<MessageList>` + `<MessageInput>`
+- Keep existing Neo-Brutalist styles (monospace, black borders)
 
 ---
 

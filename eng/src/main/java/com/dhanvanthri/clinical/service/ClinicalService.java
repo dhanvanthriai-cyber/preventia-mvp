@@ -85,10 +85,14 @@ public class ClinicalService {
 
         // --- Proceed with creating the SOAP note ---
         SoapNote note = new SoapNote();
-        // TODO: map fields from request via setters / ModelMapper once Lombok is added
-        //       e.g. note.setSubjective(request.subjective());
-        //            note.setAppointmentId(appointmentId);
-        //            note.setAuthorEmail(currentUserEmail);
+        note.setPatientId(request.patientId());
+        note.setDoctorId(request.doctorId());
+        note.setSubjective(request.subjective());
+        note.setObjective(request.objective());
+        note.setAssessment(request.assessment());
+        note.setPlan(request.plan());
+        note.setSessionToken(request.sessionToken());
+        note.setPrescriptionS3Key(request.prescriptionS3Key());
         SoapNote saved = soapNoteRepo.save(note);
         return toResponse(saved);
     }
@@ -101,7 +105,8 @@ public class ClinicalService {
      * @deprecated Use {@link #createSoapNote(Long, SoapNoteRequest, String)} instead.
      *             This stub does not enforce session locks.
      */
-    @Deprecated(since = "phase-2", forRemoval = true)
+    @Deprecated
+    @SuppressWarnings("DeprecatedIsStillUsed")
     public SoapNote createNote(SoapNoteRequest req) {
         SoapNote note = new SoapNote();
         // TODO: map fields via ModelMapper or manual setters after Lombok is added
@@ -122,7 +127,17 @@ public class ClinicalService {
     // -------------------------------------------------------------------------
 
     private SoapNoteResponse toResponse(SoapNote note) {
-        // TODO: map entity fields to response record once SoapNote fields are populated
-        return new SoapNoteResponse(note.getId());
+        return new SoapNoteResponse(
+                note.getId(),
+                note.getPatientId(),
+                note.getDoctorId(),
+                note.getSubjective(),
+                note.getObjective(),
+                note.getAssessment(),
+                note.getPlan(),
+                note.getSessionToken(),
+                note.getPrescriptionS3Key(),
+                note.getCreatedAt()
+        );
     }
 }

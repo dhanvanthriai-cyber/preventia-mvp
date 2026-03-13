@@ -48,5 +48,21 @@ public class InventoryAuditLog {
         USER
     }
 
-    // Getters/Setters — add Lombok in next pass
+    // Getters
+    public Long getId()              { return id; }
+    public Long getMedicationId()    { return medicationId; }
+    public int getQuantityBefore()   { return quantityBefore; }
+    public int getQuantityAfter()    { return quantityAfter; }
+    public AuditSource getSource()   { return source; }
+    public Long getActorId()         { return actorId; }
+    public String getNote()          { return note; }
+    public Instant getCreatedAt()    { return createdAt; }
+
+    // Setters
+    public void setMedicationId(Long medicationId)     { this.medicationId = medicationId; }
+    public void setQuantityBefore(int quantityBefore)  { this.quantityBefore = quantityBefore; }
+    public void setQuantityAfter(int quantityAfter)    { this.quantityAfter = quantityAfter; }
+    public void setSource(AuditSource source)          { this.source = source; }
+    public void setActorId(Long actorId)               { this.actorId = actorId; }
+    public void setNote(String note)                   { this.note = note; }
 }

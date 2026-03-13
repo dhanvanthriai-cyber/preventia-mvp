@@ -1,11 +1,13 @@
 package com.dhanvanthri.clinical.controller;
 
-import com.dhanvanthri.clinical.domain.SoapNote;
 import com.dhanvanthri.clinical.dto.SoapNoteRequest;
+import com.dhanvanthri.clinical.dto.SoapNoteResponse;
+import com.dhanvanthri.clinical.domain.SoapNote;
 import com.dhanvanthri.clinical.service.ClinicalService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,12 +22,18 @@ public class ClinicalController {
         this.clinicalService = clinicalService;
     }
 
-    /** DOCTOR creates a SOAP note during a locked virtual session. */
-    @PostMapping("/notes")
+    /**
+     * DOCTOR creates a SOAP note during an ACTIVE virtual session.
+     * Session-lock and temporal-lock are enforced in ClinicalService.
+     */
+    @PostMapping("/appointments/{appointmentId}/notes")
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasRole('DOCTOR')")
-    public SoapNote createNote(@Valid @RequestBody SoapNoteRequest request) {
-        return clinicalService.createNote(request);
+    public SoapNoteResponse createNote(
+            @PathVariable Long appointmentId,
+            @Valid @RequestBody SoapNoteRequest request,
+            Authentication authentication) {
+        return clinicalService.createSoapNote(appointmentId, request, authentication.getName());
     }
 
     /** DOCTOR or SPONSOR (with GRANTED consent) reads patient history. */
@@ -35,3 +43,5 @@ public class ClinicalController {
         return clinicalService.getPatientHistory(patientId);
     }
 }
+
+

@@ -50,6 +50,7 @@ services:
     image: docker.io/library/redis:7-alpine
     container_name: dhanvanthri-redis
     restart: unless-stopped
+    command: redis-server --save "" --appendonly no
     ports:
       - "6379:6379"
     volumes:
@@ -88,8 +89,8 @@ services:
       SPRING_DATASOURCE_USERNAME: dhan_dev
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       # --- Redis ---
-      SPRING_REDIS_HOST: redis
-      SPRING_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
       # --- App secrets ---
       JWT_SECRET:         ${JWT_SECRET}
       JWT_EXPIRY_SECONDS: ${JWT_EXPIRY_SECONDS}

@@ -51,24 +51,25 @@ public class SoapNote {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
-    // Getters/Setters — partial; full Lombok @Data pass deferred to refactor sprint
-    public Long getId()                          { return id; }
-    public Long getPatientId()                   { return patientId; }
-    public Long getDoctorId()                    { return doctorId; }
-    public String getSubjective()                { return subjective; }
-    public String getObjective()                 { return objective; }
-    public String getAssessment()                { return assessment; }
-    public String getPlan()                      { return plan; }
-    public String getSessionToken()              { return sessionToken; }
-    public String getPrescriptionS3Key()         { return prescriptionS3Key; }
-    public Instant getCreatedAt()                { return createdAt; }
+    // ── Getters ──────────────────────────────────────────────────────────────
+    public Long getId()                  { return id; }
+    public Long getPatientId()           { return patientId; }
+    public Long getDoctorId()            { return doctorId; }
+    public String getSubjective()        { return subjective; }
+    public String getObjective()         { return objective; }
+    public String getAssessment()        { return assessment; }
+    public String getPlan()              { return plan; }
+    public String getSessionToken()      { return sessionToken; }
+    public String getPrescriptionS3Key() { return prescriptionS3Key; }
+    public Instant getCreatedAt()        { return createdAt; }
 
-    public void setSubjective(String subjective)              { this.subjective = subjective; }
-    public void setObjective(String objective)                { this.objective = objective; }
-    public void setAssessment(String assessment)              { this.assessment = assessment; }
-    public void setPlan(String plan)                          { this.plan = plan; }
-    public void setSessionToken(String sessionToken)          { this.sessionToken = sessionToken; }
+    // ── Setters ──────────────────────────────────────────────────────────────
+    public void setPatientId(Long patientId)                   { this.patientId = patientId; }
+    public void setDoctorId(Long doctorId)                     { this.doctorId = doctorId; }
+    public void setSubjective(String subjective)               { this.subjective = subjective; }
+    public void setObjective(String objective)                 { this.objective = objective; }
+    public void setAssessment(String assessment)               { this.assessment = assessment; }
+    public void setPlan(String plan)                           { this.plan = plan; }
+    public void setSessionToken(String sessionToken)           { this.sessionToken = sessionToken; }
     public void setPrescriptionS3Key(String prescriptionS3Key){ this.prescriptionS3Key = prescriptionS3Key; }
-    public void setPatientId(Long patientId)                  { this.patientId = patientId; }
-    public void setDoctorId(Long doctorId)                    { this.doctorId = doctorId; }
 }

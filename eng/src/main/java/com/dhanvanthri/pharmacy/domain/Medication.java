@@ -50,6 +50,7 @@ public class Medication {
         return getDaysRemaining() <= 7;
     }
 
+<<<<<<< Updated upstream
     /**
      * Classifies refill urgency based on days remaining.
      * CRITICAL: ≤ 3 days | WARNING: ≤ 7 days | OK: > 7 days

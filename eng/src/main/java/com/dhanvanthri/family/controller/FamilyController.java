@@ -28,16 +28,16 @@ public class FamilyController {
         return familyService.initiateLink(request);
     }
 
-    /** PATIENT grants the Sponsor read access to their EMR. */
+    /** RECIPIENT grants the Sponsor read access to their EMR. */
     @PatchMapping("/{id}/grant")
-    @PreAuthorize("hasRole('PATIENT')")
+    @PreAuthorize("hasRole('RECIPIENT')")
     public FamilyLinkResponse grantConsent(@PathVariable Long id) {
         return familyService.grantConsent(id);
     }
 
-    /** PATIENT revokes previously granted access. */
+    /** RECIPIENT revokes previously granted access. */
     @PatchMapping("/{id}/revoke")
-    @PreAuthorize("hasRole('PATIENT')")
+    @PreAuthorize("hasRole('RECIPIENT')")
     public FamilyLinkResponse revokeConsent(@PathVariable Long id) {
         return familyService.revokeConsent(id);
     }

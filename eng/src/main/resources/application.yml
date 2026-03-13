@@ -3,8 +3,8 @@ spring:
     name: dhanvanthri-mvp
 
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:5432/${DB_NAME:dhanvanthri}
-    username: ${DB_USER:dhanvanthri}
+    url: jdbc:postgresql://${DB_HOST:localhost}:5432/${DB_NAME:dhanvanthri_db}
+    username: ${DB_USER:dhan_dev}
     password: ${DB_PASSWORD:changeme}
     driver-class-name: org.postgresql.Driver
 
@@ -21,6 +21,12 @@ spring:
     enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: false     # Strict: no baseline creep in prod
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      # password: ${REDIS_PASSWORD:}  # uncomment when auth is enabled
 
 server:
   port: 8080

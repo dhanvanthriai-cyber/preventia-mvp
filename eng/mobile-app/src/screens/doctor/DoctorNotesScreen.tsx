@@ -1,6 +1,6 @@
 /**
  * screens/doctor/DoctorNotesScreen.tsx
- * Dhanvanthri — Doctor's clinical notes (SOAP format)
+ * Preventia — Doctor's clinical notes (SOAP format)
  */
 
 import React from 'react';

@@ -1,6 +1,6 @@
 /**
  * navigation/RootNavigator.tsx
- * Project Dhanvanthri — Root stack: auth gate → role portal
+ * Project Preventia — Root stack: auth gate → role portal
  */
 
 import React from 'react';

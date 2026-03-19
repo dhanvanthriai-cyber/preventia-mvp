@@ -1,5 +1,5 @@
 # =============================================================================
-# Project Dhanvanthri — Multi-Stage Dockerfile
+# Project Preventia — Multi-Stage Dockerfile
 # Stage 1 builds a fat JAR via Maven; Stage 2 runs it on a lean JRE image.
 #
 # Images pulled from:
@@ -14,29 +14,31 @@
 # ---------------------------------------------------------------------------
 # Stage 1: Build
 # ---------------------------------------------------------------------------
-FROM docker.io/library/maven:3.9-eclipse-temurin-21 AS build
+FROM --platform=linux/amd64 docker.io/library/maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /app
 
 # Copy POM first so dependency layer is cached independently of source changes
 COPY pom.xml .
 RUN mvn dependency:go-offline -B
 
+# CACHE_BUST forces this layer to recompile when passed as --build-arg CACHE_BUST=$(date +%s)
+ARG CACHE_BUST=1
 COPY src ./src
 RUN mvn clean package -DskipTests -B
 
 # ---------------------------------------------------------------------------
 # Stage 2: Runtime (lean JRE only — no JDK, no Maven)
 # ---------------------------------------------------------------------------
-FROM docker.io/library/eclipse-temurin:21-jre
+FROM --platform=linux/amd64 docker.io/library/eclipse-temurin:21-jre
 WORKDIR /app
 
 # Non-root user for security (no login shell, no home dir)
-RUN groupadd -r dhanvanthri && useradd -r -g dhanvanthri dhanvanthri
+RUN groupadd -r preventia && useradd -r -g preventia preventia
 
 COPY --from=build /app/target/*.jar app.jar
-RUN chown dhanvanthri:dhanvanthri app.jar
+RUN chown preventia:preventia app.jar
 
-USER dhanvanthri
+USER preventia
 
 EXPOSE 8080
 

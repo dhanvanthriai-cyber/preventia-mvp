@@ -1,6 +1,6 @@
 /**
  * MedicationBadge.tsx
- * Project Dhanvanthri — Pharmacy Tab Badge
+ * Project Preventia — Pharmacy Tab Badge
  *
  * Surfaced in the bottom navigation tab bar to immediately signal
  * CRITICAL or WARNING medication refill counts to the patient.

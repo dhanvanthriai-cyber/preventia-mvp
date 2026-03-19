@@ -1,6 +1,6 @@
 /**
  * navigation/PatientNavigator.tsx
- * Project Dhanvanthri — Patient portal bottom-tab navigator
+ * Project Preventia — Patient portal bottom-tab navigator
  *
  * Tabs: Home | Appointments | Chat | Pharmacy | Profile
  */

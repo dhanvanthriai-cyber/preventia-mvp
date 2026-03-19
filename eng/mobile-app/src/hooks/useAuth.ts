@@ -1,20 +1,20 @@
 /**
  * useAuth.ts — Authentication hook
- * Project Dhanvanthri
+ * Project Preventia
  *
  * Calls:
  *  POST /api/v1/auth/login    → { token, role, userId, name }
  *  POST /api/v1/auth/register → { token, role, userId, name }
  *
  * Stores token in-memory (AsyncStorage in production).
- * Role drives navigation: RECIPIENT | SPONSOR | DOCTOR | PHARMACIST
+ * Role drives navigation: RECIPIENT | SPONSOR | DOCTOR | PHARMACIST | ADMIN
  */
 
 import { useCallback, useState } from 'react';
 
 const API_BASE = process.env.REACT_NATIVE_API_BASE_URL ?? 'http://localhost:8080';
 
-export type UserRole = 'RECIPIENT' | 'SPONSOR' | 'DOCTOR' | 'PHARMACIST';
+export type UserRole = 'RECIPIENT' | 'SPONSOR' | 'DOCTOR' | 'PHARMACIST' | 'ADMIN';
 
 export interface AuthUser {
   token: string;

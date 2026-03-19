@@ -5,7 +5,7 @@
 
 cd "$(dirname "$0")"
 
-echo "🚀 Starting Dhanvanthri UI on http://localhost:8081"
+echo "🚀 Starting Preventia UI on http://localhost:8081"
 echo "   Press Ctrl+C to stop"
 echo ""
 

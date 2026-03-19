@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Dhanvanthri",
-    "slug": "dhanvanthri-mvp",
+    "name": "Preventia",
+    "slug": "preventia-mvp",
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -10,13 +10,13 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.dhanvanthri.mvp"
+      "bundleIdentifier": "com.preventia.mvp"
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.dhanvanthri.mvp"
+      "package": "com.preventia.mvp"
     },
     "web": {
       "bundler": "metro",

@@ -1,6 +1,6 @@
 /**
  * screens/auth/LoginScreen.tsx
- * Project Dhanvanthri — Login / entry screen
+ * Project Preventia — Login / entry screen
  *
  * MVP: email + password form → calls POST /api/v1/auth/login
  * On success the JWT payload contains the user's role which drives
@@ -77,7 +77,7 @@ export function LoginScreen({ navigation }: Props) {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.logo}>Dhanvanthri</Text>
+          <Text style={styles.logo}>Preventia</Text>
           <Text style={styles.tagline}>Your trusted health companion</Text>
         </View>
 

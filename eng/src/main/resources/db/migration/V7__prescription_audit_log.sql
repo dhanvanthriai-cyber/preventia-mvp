@@ -1,6 +1,6 @@
 -- =============================================================================
 -- V7__prescription_audit_log.sql
--- Project Dhanvanthri — Prescription Audit Trail
+-- Project Preventia — Prescription Audit Trail
 -- Database: PostgreSQL 16 | Flyway managed — never edit after commit
 -- Region: AWS Mumbai (ap-south-1) — PHI data residency per DPDP Act 2023
 --

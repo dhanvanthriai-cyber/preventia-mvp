@@ -1,6 +1,6 @@
 /**
  * PharmacyPaymentScreen.tsx — Razorpay checkout for pharmacy payments
- * Project Dhanvanthri | Neo-Brutalist Wellness
+ * Project Preventia | Neo-Brutalist Wellness
  */
 import React, { useState } from 'react';
 import {

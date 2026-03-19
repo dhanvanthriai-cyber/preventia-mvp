@@ -1,6 +1,6 @@
 /**
  * MedicationListScreen.tsx
- * Project Dhanvanthri — Pharmacy: Refill Required Feed
+ * Project Preventia — Pharmacy: Refill Required Feed
  *
  * Mockup reference: "User Mobile view.jpeg"
  * Design observations from mockup:

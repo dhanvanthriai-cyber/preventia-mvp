@@ -1,0 +1,85 @@
+# =============================================================================
+# Dockerfile.web — Next.js production image for AWS App Runner
+# Build context: eng/  (the parent of both web-app/ and shared/)
+#
+# IMPORTANT: App Runner runs linux/amd64. Always build with:
+#   podman build --platform linux/amd64 ...
+#
+# Usage from deploy.sh:
+#   podman build --platform linux/amd64 -f Dockerfile.web -t preventia/web ./eng
+# =============================================================================
+
+# Pin platform on every FROM so cross-compile works on Apple Silicon
+FROM --platform=linux/amd64 node:20-alpine AS shared-builder
+WORKDIR /shared
+COPY shared/package.json shared/tsconfig.json ./
+RUN npm install --ignore-scripts
+COPY shared/src ./src
+RUN npm run build
+
+# ---------------------------------------------------------------------------
+# Stage 2: Install web-app dependencies
+# ---------------------------------------------------------------------------
+FROM --platform=linux/amd64 node:20-alpine AS deps
+WORKDIR /app
+
+# Copy web-app package files
+COPY web-app/package.json web-app/package-lock.json* ./
+
+# Copy the pre-built shared package into the expected relative location
+# so `file:../shared` resolves correctly
+COPY --from=shared-builder /shared /shared
+
+# npm ci downloads the arm64 SWC binary based on the build host.
+# Explicitly add the linux-x64-musl binary so Next.js can find it on Alpine amd64.
+RUN npm ci --prefer-offline && \
+    node -e "require('@next/swc-linux-x64-musl')" 2>/dev/null || \
+    npm install --no-save --ignore-scripts @next/swc-linux-x64-musl
+
+# ---------------------------------------------------------------------------
+# Stage 3: Build Next.js
+# ---------------------------------------------------------------------------
+FROM --platform=linux/amd64 node:20-alpine AS builder
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=shared-builder /shared /shared
+COPY web-app/ .
+
+# Remove any .babelrc that may have been copied — we use SWC in production.
+# .babelrc is also excluded via .dockerignore but this is a safety net.
+RUN rm -f .babelrc babel.config.js babel.config.cjs babel.config.mjs && \
+    mkdir -p public
+
+# Build-time public env var — baked into the JS bundle
+ARG NEXT_PUBLIC_API_BASE_URL
+ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=production
+
+RUN npm run build
+
+# ---------------------------------------------------------------------------
+# Stage 4: Lean runtime (no dev dependencies, no source)
+# ---------------------------------------------------------------------------
+FROM --platform=linux/amd64 node:20-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser  --system --uid 1001 nextjs
+
+COPY --from=builder /app/public                         ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static     ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/apprunner-entrypoint.cjs ./apprunner-entrypoint.cjs
+
+USER nextjs
+
+EXPOSE 3000
+ENV PORT=3000
+
+# App Runner injects HOSTNAME at runtime, so force the bind address in a wrapper.
+CMD ["node", "apprunner-entrypoint.cjs"]

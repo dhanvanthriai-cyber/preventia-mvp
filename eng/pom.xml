@@ -12,11 +12,11 @@
         <relativePath/>
     </parent>
 
-    <groupId>com.dhanvanthri</groupId>
+    <groupId>com.preventia</groupId>
     <artifactId>healthcare-mvp</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
-    <name>Project Dhanvanthri MVP</name>
+    <name>Project Preventia MVP</name>
     <description>High-trust NRI healthcare platform — Modular Monolith</description>
 
     <properties>
@@ -52,6 +52,10 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-oauth2-jose</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -134,11 +138,9 @@
         </dependency>
 
         <!-- ===== Stream Chat (server-side token generation) ===== -->
-        <dependency>
-            <groupId>io.getstream</groupId>
-            <artifactId>stream-java</artifactId>
-            <version>1.1.0</version>
-        </dependency>
+        <!-- stream-java SDK is not on Maven Central; use JJWT directly for -->
+        <!-- server-side Stream user token generation (HS256 signed JWT).    -->
+        <!-- JJWT is already on the classpath via spring-boot-starter-security. -->
 
         <!-- ===== Dev Tools ===== -->
         <dependency>
@@ -181,7 +183,7 @@
                 <artifactId>flyway-maven-plugin</artifactId>
                 <version>10.10.0</version>
                 <configuration>
-                    <url>jdbc:postgresql://localhost:5432/dhanvanthri_db</url>
+                    <url>jdbc:postgresql://localhost:5432/${flyway.db.name:preventia_db}</url>
                     <user>dhan_dev</user>
                     <password>${flyway.password}</password>
                     <locations>filesystem:src/main/resources/db/migration</locations>

@@ -2,7 +2,7 @@
   "name": "healthcare-mvp-mobile",
   "version": "0.1.0",
   "private": true,
-  "description": "Project Dhanvanthri — Neo-Brutalist Wellness Mobile App",
+  "description": "Project Preventia — Neo-Brutalist Wellness Mobile App",
   "main": "index.js",
   "scripts": {
     "start": "expo start",
@@ -15,7 +15,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@dhanvanthri/shared": "file:../shared",
+    "@preventia/shared": "file:../shared",
     "@daily-co/daily-js": "^0.65.0",
     "@expo/metro-runtime": "~3.1.3",
     "@expo/vector-icons": "^14.0.0",

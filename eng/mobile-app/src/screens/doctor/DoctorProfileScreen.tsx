@@ -1,6 +1,6 @@
 /**
  * screens/doctor/DoctorProfileScreen.tsx
- * Dhanvanthri — Doctor profile and settings
+ * Preventia — Doctor profile and settings
  */
 
 import React from 'react';
@@ -21,7 +21,7 @@ export function DoctorProfileScreen() {
           <View>
             <Text style={styles.name}>Dr. Arjun Sharma</Text>
             <Text style={styles.specialty}>General Physician · MBBS, MD</Text>
-            <Text style={styles.email}>arjun.sharma@dhanvanthri.in</Text>
+            <Text style={styles.email}>arjun.sharma@preventia.in</Text>
           </View>
         </View>
 

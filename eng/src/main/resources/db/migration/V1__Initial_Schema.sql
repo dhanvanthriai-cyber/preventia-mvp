@@ -1,6 +1,6 @@
 -- =============================================================================
 -- V1__Initial_Schema.sql
--- Project Dhanvanthri — Initial Schema
+-- Project Preventia — Initial Schema
 -- Database: PostgreSQL 16
 -- Migration Tool: Flyway (managed; never edit after commit to version control)
 -- Region: AWS Mumbai (ap-south-1) — PHI data residency per DPDP Act 2023
@@ -16,7 +16,7 @@
 -- -----------------------------------------------------------------------------
 -- TRI-PARTY VALIDATION MODEL
 -- -----------------------------------------------------------------------------
--- Dhanvanthri enforces a three-party consent chain before any EMR data can be
+-- Preventia enforces a three-party consent chain before any EMR data can be
 -- accessed by a Sponsor (NRI child):
 --
 --   1. SPONSOR (NRI child) initiates a family link → status = PENDING

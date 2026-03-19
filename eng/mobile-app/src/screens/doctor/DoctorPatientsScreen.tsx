@@ -1,6 +1,6 @@
 /**
  * screens/doctor/DoctorPatientsScreen.tsx
- * Dhanvanthri — Doctor's patient list
+ * Preventia — Doctor's patient list
  */
 
 import React from 'react';

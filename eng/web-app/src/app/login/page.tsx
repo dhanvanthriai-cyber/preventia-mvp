@@ -1,5 +1,5 @@
 /**
- * /login — Dhanvanthri portal login page
+ * /login — Preventia portal login page
  *
  * Server component wrapper — LoginForm is the 'use client' leaf.
  * Suspense boundary is required because LoginForm calls useSearchParams().
@@ -9,12 +9,12 @@ import { Suspense } from 'react';
 import LoginForm from './LoginForm';
 
 export const metadata: Metadata = {
-  title: 'Sign In — Dhanvanthri Portal',
+  title: 'Sign In — Preventia Portal',
 };
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div style={{ fontFamily: 'monospace', padding: 32 }}>Loading…</div>}>
+    <Suspense fallback={<div style={{ padding: 32, color: '#6F6A63' }}>Loading…</div>}>
       <LoginForm />
     </Suspense>
   );

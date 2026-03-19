@@ -1,6 +1,6 @@
 /**
  * screens/auth/RoleSelectScreen.tsx
- * Project Dhanvanthri — Dev/demo role picker
+ * Project Preventia — Dev/demo role picker
  *
  * Tap a card to jump directly to a portal without logging in.
  * Remove this screen (or gate it behind __DEV__) before production.

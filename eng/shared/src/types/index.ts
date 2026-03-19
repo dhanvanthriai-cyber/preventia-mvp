@@ -1,6 +1,6 @@
 /**
  * types/index.ts — Shared TypeScript types
- * Project Dhanvanthri
+ * Project Preventia
  *
  * Must stay in sync with the Spring Boot domain / DTO layer.
  * No React Native or DOM dependencies.
@@ -8,7 +8,7 @@
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
-export type UserRole = 'RECIPIENT' | 'SPONSOR' | 'DOCTOR' | 'PHARMACIST';
+export type UserRole = 'RECIPIENT' | 'SPONSOR' | 'DOCTOR' | 'PHARMACIST' | 'ADMIN';
 
 export interface AuthUser {
   token: string;
@@ -19,7 +19,7 @@ export interface AuthUser {
 
 // ─── Appointments ─────────────────────────────────────────────────────────────
 
-/** Must match com.dhanvanthri.appointment.domain.AppointmentStatus */
+/** Must match com.preventia.appointment.domain.AppointmentStatus */
 export type AppointmentStatus = 'SCHEDULED' | 'ACTIVE' | 'COMPLETED' | 'LOCKED';
 
 export interface Appointment {
@@ -37,6 +37,8 @@ export interface Appointment {
   sponsorId?: number;
   recipientName?: string;
   doctorName?: string;
+  /** S3 URL for the attached prescription PDF, if any */
+  prescriptionUrl?: string;
 }
 
 export interface CreateAppointmentRequest {

@@ -1,0 +1,257 @@
+package com.preventia.appointment.service;
+
+import com.preventia.appointment.domain.Appointment;
+import com.preventia.appointment.domain.AppointmentStatus;
+import com.preventia.appointment.dto.AppointmentResponse;
+import com.preventia.appointment.dto.CreateAppointmentRequest;
+import com.preventia.appointment.dto.DailyRoomProvisionResult;
+import com.preventia.appointment.repository.AppointmentRepository;
+import com.preventia.auth.repository.UserRepository;
+import com.preventia.family.domain.User;
+import jakarta.persistence.EntityNotFoundException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import java.util.List;
+import java.util.stream.Collectors;
+
+/**
+ * Business logic layer for the Appointment module.
+ *
+ * On appointment creation, DailyRoomService is called to provision a private
+ * Daily.co room and generate per-participant meeting tokens. The room URL and
+ * name are persisted to the Appointment entity; tokens are returned in the
+ * response for immediate client use (they are NOT stored in the DB).
+ *
+ * Status transitions are intentionally explicit (no generic setStatus API)
+ * to make the state machine legible and auditable.
+ */
+@Service
+@Transactional
+public class AppointmentService {
+
+    private final AppointmentRepository appointmentRepository;
+    private final DailyRoomService      dailyRoomService;
+    private final UserRepository        userRepository;
+
+    public AppointmentService(AppointmentRepository appointmentRepository,
+                              DailyRoomService dailyRoomService,
+                              UserRepository userRepository) {
+        this.appointmentRepository = appointmentRepository;
+        this.dailyRoomService      = dailyRoomService;
+        this.userRepository        = userRepository;
+    }
+
+    // -------------------------------------------------------------------------
+    // Query
+    // -------------------------------------------------------------------------
+
+    /**
+     * Returns appointments filtered by one of: doctorId, sponsorId, or recipientId.
+     * At least one param must be non-null; doctorId takes priority.
+     */
+    @Transactional(readOnly = true)
+    public List<AppointmentResponse> getAppointments(Long doctorId, Long sponsorId, Long recipientId) {
+        List<Appointment> results;
+        if (doctorId != null) {
+            results = appointmentRepository.findByDoctorId(doctorId);
+        } else if (sponsorId != null) {
+            results = appointmentRepository.findBySponsorId(sponsorId);
+        } else if (recipientId != null) {
+            results = appointmentRepository.findByRecipientId(recipientId);
+        } else {
+            results = appointmentRepository.findAll();
+        }
+        return results.stream().map(a -> toResponse(a, null)).collect(Collectors.toList());
+    }
+
+    // -------------------------------------------------------------------------
+    // Create
+    // -------------------------------------------------------------------------
+
+    /**
+     * Persist a new appointment and auto-provision a Daily.co video room.
+     *
+     * Flow:
+     *   1. Call DailyRoomService to create the room + issue meeting tokens.
+     *   2. Persist the Appointment with the returned room URL + name.
+     *   3. Return the full AppointmentResponse including all tokens.
+     *
+     * The appointment ID used for room naming is derived from the DB-generated
+     * primary key — this requires a two-step save (first flush, then provision).
+     * We flush first to get the ID, then provision Daily.co, then update the entity.
+     *
+     * @param request validated inbound DTO
+     * @return response DTO containing the persisted entity's id, state, and tokens
+     */
+    public AppointmentResponse createAppointment(CreateAppointmentRequest request) {
+        // Step 1: Persist with placeholder room fields to obtain the DB-generated ID
+        Appointment appointment = new Appointment(
+                request.recipientId(),
+                request.sponsorId(),
+                request.doctorId(),
+                request.startTime(),
+                request.endTime(),
+                "pending",   // temporary placeholder — updated after Daily.co call
+                "pending"
+        );
+        Appointment saved = appointmentRepository.saveAndFlush(appointment);
+
+        // Step 2: Provision Daily.co room using the real appointment ID
+        String appointmentLabel = String.format("APT-%05d", saved.getId());
+        DailyRoomProvisionResult room = dailyRoomService.provision(
+                appointmentLabel,
+                request.endTime(),
+                request.doctorId(),
+                request.doctorName(),
+                request.recipientId(),
+                request.recipientName(),
+                request.sponsorId(),
+                request.sponsorName()
+        );
+
+        // Step 3: Write the real room URL + name back to the persisted entity
+        saved.setDailyRoomUrl(room.roomUrl());
+        saved.setDailyRoomName(room.roomName());
+        // @Transactional dirty-check will flush the update automatically
+
+        return toResponse(saved, room);
+    }
+
+    // -------------------------------------------------------------------------
+    // State transitions
+    // -------------------------------------------------------------------------
+
+    /**
+     * Mark an appointment ACTIVE — called when the Daily.co room goes live.
+     * This opens EMR write-access for SOAP notes.
+     */
+    public AppointmentResponse activateAppointment(Long appointmentId) {
+        Appointment appointment = findOrThrow(appointmentId);
+        appointment.setStatus(AppointmentStatus.ACTIVE);
+        return toResponse(appointment, null);
+    }
+
+    /**
+     * Mark an appointment COMPLETED — called when the session ends normally.
+     */
+    public AppointmentResponse completeAppointment(Long appointmentId) {
+        Appointment appointment = findOrThrow(appointmentId);
+        appointment.setStatus(AppointmentStatus.COMPLETED);
+        return toResponse(appointment, null);
+    }
+
+    /**
+     * Lock an appointment — revokes EMR write-access and archives the session.
+     * Triggered manually by a doctor or automatically via the Daily.co
+     * meeting-ended webhook.
+     */
+    public AppointmentResponse lockAppointment(Long appointmentId) {
+        Appointment appointment = findOrThrow(appointmentId);
+        appointment.setStatus(AppointmentStatus.LOCKED);
+        return toResponse(appointment, null);
+    }
+
+    // -------------------------------------------------------------------------
+    // Token re-issuance
+    // -------------------------------------------------------------------------
+
+    /**
+     * Re-issues fresh Daily.co meeting tokens for an existing appointment.
+     *
+     * Tokens are NOT stored in the DB (they are issued once at creation and
+     * never persisted). This endpoint allows the frontend to fetch fresh tokens
+     * at any time using the stored room name and participant IDs.
+     *
+     * @param appointmentId DB primary key
+     * @return AppointmentResponse with fresh doctorToken, recipientToken (and sponsorToken if applicable)
+     */
+    @Transactional(readOnly = true)
+    public AppointmentResponse getTokens(Long appointmentId) {
+        Appointment appt = findOrThrow(appointmentId);
+
+        // Look up display names from the users table
+        String doctorName    = userRepository.findById(appt.getDoctorId())
+                .map(User::getName).orElse("Doctor");
+        String recipientName = userRepository.findById(appt.getRecipientId())
+                .map(User::getName).orElse("Patient");
+
+        String sponsorName = null;
+        if (appt.getSponsorId() != null) {
+            sponsorName = userRepository.findById(appt.getSponsorId())
+                    .map(User::getName).orElse("Sponsor");
+        }
+
+        DailyRoomProvisionResult tokens = dailyRoomService.issueTokens(
+                appt.getDailyRoomName(),
+                appt.getEndTime(),
+                appt.getDoctorId(),    doctorName,
+                appt.getRecipientId(), recipientName,
+                appt.getSponsorId(),   sponsorName
+        );
+
+        return toResponse(appt, tokens);
+    }
+
+    // -------------------------------------------------------------------------
+    // Webhook delegation entry-point
+    // -------------------------------------------------------------------------
+
+    /**
+     * Process an inbound Daily.co webhook event payload.
+     *
+     * Currently handles:
+     *   - "meeting.ended"   → locks the appointment (primary EMR lock trigger)
+     *   - "meeting.started" → activates the appointment (fallback / belt-and-suspenders)
+     *
+     * @param payload raw event body forwarded from AppointmentController
+     */
+    public void handleDailyWebhook(java.util.Map<String, Object> payload) {
+        String eventType = String.valueOf(payload.getOrDefault("event", ""));
+
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Object> room =
+                (java.util.Map<String, Object>) payload.getOrDefault("room", java.util.Collections.emptyMap());
+
+        String roomName = String.valueOf(room.getOrDefault("name", ""));
+        if (roomName.trim().isEmpty()) return;
+
+        appointmentRepository.findByDailyRoomName(roomName).ifPresent(appt -> {
+            switch (eventType) {
+                case "meeting.started" -> appt.setStatus(AppointmentStatus.ACTIVE);
+                case "meeting.ended"   -> appt.setStatus(AppointmentStatus.LOCKED);
+                default                -> { /* unhandled event — ignore */ }
+            }
+        });
+    }
+
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
+    private Appointment findOrThrow(Long id) {
+        return appointmentRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Appointment not found: " + id));
+    }
+
+    /**
+     * Map entity → response DTO.
+     * room is null for state-transition calls (tokens are one-time at creation).
+     */
+    private AppointmentResponse toResponse(Appointment a, DailyRoomProvisionResult room) {
+        return new AppointmentResponse(
+                a.getId(),
+                a.getRecipientId(),
+                a.getSponsorId(),
+                a.getDoctorId(),
+                a.getStartTime(),
+                a.getEndTime(),
+                a.getDailyRoomUrl(),
+                a.getDailyRoomName(),
+                a.getStatus(),
+                a.getCreatedAt(),
+                room != null ? room.doctorToken()    : null,
+                room != null ? room.recipientToken() : null,
+                room != null ? room.sponsorToken()   : null
+        );
+    }
+}

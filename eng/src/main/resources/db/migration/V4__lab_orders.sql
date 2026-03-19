@@ -1,6 +1,6 @@
 -- ============================================================
 -- Flyway Migration: V4__lab_orders.sql
--- Project: Dhanvanthri Healthcare MVP
+-- Project: Preventia Healthcare MVP
 -- Owner: @ops / @eng
 -- Date: 2026-03-11
 -- Description: Creates lab_orders table for diagnostic lab

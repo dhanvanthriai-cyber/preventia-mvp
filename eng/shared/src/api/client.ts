@@ -1,6 +1,6 @@
 /**
  * client.ts — Base API client
- * Project Dhanvanthri
+ * Project Preventia
  *
  * Platform-agnostic: no RN or DOM imports.
  * Token can be supplied via a synchronous or async getter,
@@ -10,15 +10,15 @@
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-/** Fallback if no BASE_URL is set at call time */
-const DEFAULT_BASE_URL = 'http://localhost:8080';
+/** Fallback if no BASE_URL is set at call time — empty = relative URL, proxied by Next.js */
+const DEFAULT_BASE_URL = '';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type GetTokenFn = () => string | null | Promise<string | null>;
 
 export interface ApiClientConfig {
-  /** Spring Boot base URL, e.g. https://api.dhanvanthri.in */
+  /** Spring Boot base URL, e.g. https://api.preventia.in */
   baseUrl?: string;
   /** Async or sync function that returns the current bearer token */
   getToken?: GetTokenFn;

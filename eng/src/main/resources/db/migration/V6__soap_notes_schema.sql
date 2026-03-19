@@ -1,6 +1,6 @@
 -- =============================================================================
 -- V6__soap_notes_schema.sql
--- Project Dhanvanthri — SOAP Notes Table
+-- Project Preventia — SOAP Notes Table
 -- Database: PostgreSQL 16 | Flyway managed — never edit after commit
 -- Region: AWS Mumbai (ap-south-1) — PHI data residency per DPDP Act 2023
 --

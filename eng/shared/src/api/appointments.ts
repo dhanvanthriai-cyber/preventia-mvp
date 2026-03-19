@@ -1,6 +1,6 @@
 /**
  * appointments.ts — Typed API wrappers for the Appointment resource
- * Project Dhanvanthri
+ * Project Preventia
  *
  * Endpoints (Spring Boot):
  *  POST /api/v1/appointments                    → AppointmentResponse

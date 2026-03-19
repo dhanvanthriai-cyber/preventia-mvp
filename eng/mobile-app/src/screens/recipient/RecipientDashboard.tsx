@@ -1,23 +1,16 @@
-/**
- * RecipientDashboard.tsx — Indian parent/elder home screen
- * Project Dhanvanthri | Neo-Brutalist Wellness
- *
- * Minimal, friction-free UX for elderly users.
- * Large text, high contrast, single CTA per section.
- *
- * API calls:
- *  GET /api/v1/appointments?recipientId={userId}
- *  GET /api/v1/patients/{userId}/medications/alerts
- */
-
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator, RefreshControl, SafeAreaView,
-  ScrollView, StyleSheet, Text, View,
+  ActivityIndicator,
+  RefreshControl,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
+import { AuthUser } from '@preventia/shared';
 import ActionCard from '../../components/ActionCard';
-import { Colors, Spacing, Typography } from '../../theme/theme';
-import { AuthUser } from '@dhanvanthri/shared';
+import { Colors, Imagery, Radii, Spacing, Surfaces, Typography } from '../../theme/theme';
 
 const API_BASE = process.env.REACT_NATIVE_API_BASE_URL ?? 'http://localhost:8080';
 
@@ -28,110 +21,157 @@ interface Props {
 }
 
 interface Appointment {
-  id: number; dailyRoomUrl: string; recipientToken: string;
-  startTime: string; status: string; doctorName?: string;
+  id: number;
+  dailyRoomUrl: string;
+  recipientToken: string;
+  startTime: string;
+  status: string;
+  doctorName?: string;
 }
-interface MedAlert { urgency: string; medicationName: string; daysRemaining: number; }
+
+interface MedAlert {
+  urgency: string;
+  medicationName: string;
+  daysRemaining: number;
+}
 
 export const RecipientDashboard: React.FC<Props> = ({ user, onJoinConsultation, onLogout }) => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [medications, setMedications]   = useState<MedAlert[]>([]);
-  const [loading, setLoading]           = useState(true);
-  const [refreshing, setRefreshing]     = useState(false);
+  const [medications, setMedications] = useState<MedAlert[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
-      const [apptRes, medRes] = await Promise.all([
-        fetch(`${API_BASE}/api/v1/appointments?recipientId=${user.userId}`,
-          { headers: { Authorization: `Bearer ${user.token}` } }),
-        fetch(`${API_BASE}/api/v1/patients/${user.userId}/medications/alerts`,
-          { headers: { Authorization: `Bearer ${user.token}` } }),
+      const [appointmentResponse, medicationResponse] = await Promise.all([
+        fetch(`${API_BASE}/api/v1/appointments?recipientId=${user.userId}`, {
+          headers: { Authorization: `Bearer ${user.token}` },
+        }),
+        fetch(`${API_BASE}/api/v1/patients/${user.userId}/medications/alerts`, {
+          headers: { Authorization: `Bearer ${user.token}` },
+        }),
       ]);
-      if (apptRes.ok) setAppointments(await apptRes.json());
-      if (medRes.ok)  setMedications(await medRes.json());
-    } catch (e) { console.error('[RecipientDashboard]', e); }
-    finally { setLoading(false); setRefreshing(false); }
+      if (appointmentResponse.ok) setAppointments(await appointmentResponse.json() as Appointment[]);
+      if (medicationResponse.ok) setMedications(await medicationResponse.json() as MedAlert[]);
+    } catch (error) {
+      console.error('[RecipientDashboard]', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, [user]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    void fetchData();
+  }, [fetchData]);
 
-  const activeAppt    = appointments.find(a => a.status === 'ACTIVE');
-  const nextAppt      = appointments.find(a => a.status === 'SCHEDULED');
-  const criticalMeds  = medications.filter(m => m.urgency === 'CRITICAL');
-  const warningMeds   = medications.filter(m => m.urgency === 'WARNING');
+  const activeAppt = appointments.find((appointment) => appointment.status === 'ACTIVE');
+  const nextAppt = appointments.find((appointment) => appointment.status === 'SCHEDULED');
+  const criticalMeds = medications.filter((medication) => medication.urgency === 'CRITICAL');
+  const warningMeds = medications.filter((medication) => medication.urgency === 'WARNING');
 
-  if (loading) return <View style={s.centered}><ActivityIndicator color={Colors.trustBlue} size="large" /></View>;
+  if (loading) {
+    return (
+      <View style={s.centered}>
+        <ActivityIndicator color={Colors.sage} size="large" />
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={s.root}>
-      <ScrollView refreshControl={
-        <RefreshControl refreshing={refreshing}
-          onRefresh={() => { setRefreshing(true); fetchData(); }} tintColor={Colors.trustBlue} />}>
-
-        {/* Header — large, friendly */}
-        <View style={s.header}>
-          <Text style={s.greeting}>Namaste,{'\n'}{user.name.split(' ')[0]} ji</Text>
-        </View>
-
-        {/* Active call — top priority */}
-        {activeAppt && (
-          <ActionCard urgency="critical" isSticky
-            title="YOUR DOCTOR IS WAITING"
-            subtitle={activeAppt.doctorName}
-            ctaLabel="JOIN CALL NOW"
-            onPress={() => onJoinConsultation(activeAppt.dailyRoomUrl, activeAppt.recipientToken, activeAppt.id)} />
+      <ScrollView
+        refreshControl={(
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              void fetchData();
+            }}
+            tintColor={Colors.sage}
+          />
         )}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={s.content}>
+          <View style={s.heroCard}>
+            <Text style={s.eyebrow}>Parent view</Text>
+            <Text style={s.greeting}>Namaste, {user.name.split(' ')[0]} ji</Text>
+            <Text style={s.copy}>
+              Everything important is here in a simpler, calmer format.
+            </Text>
 
-        {/* Next appointment */}
-        {!activeAppt && nextAppt && (
-          <>
-            <Text style={s.section}>UPCOMING APPOINTMENT</Text>
-            <ActionCard urgency="normal"
-              title={nextAppt.doctorName ?? 'Doctor Appointment'}
-              subtitle={new Date(nextAppt.startTime).toLocaleString('en-IN')}
-              ctaLabel="Join When Ready"
-              onPress={() => onJoinConsultation(nextAppt.dailyRoomUrl, nextAppt.recipientToken, nextAppt.id)} />
-          </>
-        )}
-
-        {/* No appointments */}
-        {!activeAppt && !nextAppt && (
-          <>
-            <Text style={s.section}>APPOINTMENTS</Text>
-            <View style={s.emptyBox}>
-              <Text style={s.emptyText}>No upcoming appointments.{'\n'}Your family will schedule one for you.</Text>
+            <View style={s.photoPlaceholder}>
+              <View style={s.photoGlow} />
+              <View style={s.photoCaption}>
+                <Text style={s.photoCaptionTitle}>Lifestyle photo placeholder</Text>
+                <Text style={s.photoCaptionText}>
+                  Familiar home setting, warm sunlight, and an everyday calm feeling.
+                </Text>
+              </View>
             </View>
-          </>
-        )}
+          </View>
 
-        {/* Critical medications */}
-        {criticalMeds.length > 0 && (
-          <>
-            <Text style={s.section}>⚠️ MEDICINE RUNNING OUT</Text>
-            {criticalMeds.map(m => (
-              <ActionCard key={m.medicationName} urgency="critical"
-                title={m.medicationName}
-                value={`${m.daysRemaining} days`}
-                ctaLabel="Tell My Family" onPress={() => {}} />
-            ))}
-          </>
-        )}
+          {activeAppt ? (
+            <>
+              <Text style={s.sectionTitle}>Your doctor is ready</Text>
+              <ActionCard
+                urgency="critical"
+                title="Join your consultation"
+                subtitle={activeAppt.doctorName}
+                ctaLabel="Join call now"
+                onPress={() => onJoinConsultation(activeAppt.dailyRoomUrl, activeAppt.recipientToken, activeAppt.id)}
+              />
+            </>
+          ) : null}
 
-        {/* Warning medications */}
-        {warningMeds.length > 0 && (
-          <>
-            <Text style={s.section}>MEDICINE — REFILL SOON</Text>
-            {warningMeds.map(m => (
-              <ActionCard key={m.medicationName} urgency="warning"
-                title={m.medicationName}
-                value={`${m.daysRemaining} days`}
-                ctaLabel="Remind Family" onPress={() => {}} />
-            ))}
-          </>
-        )}
+          {!activeAppt && nextAppt ? (
+            <>
+              <Text style={s.sectionTitle}>Next appointment</Text>
+              <ActionCard
+                urgency="normal"
+                title={nextAppt.doctorName ?? 'Doctor appointment'}
+                subtitle={new Date(nextAppt.startTime).toLocaleString('en-IN')}
+                ctaLabel="See details"
+                onPress={() => onJoinConsultation(nextAppt.dailyRoomUrl, nextAppt.recipientToken, nextAppt.id)}
+              />
+            </>
+          ) : null}
 
-        <View style={s.logoutRow}>
-          <Text style={s.logout} onPress={onLogout}>Log Out</Text>
+          {!activeAppt && !nextAppt ? (
+            <View style={s.emptyCard}>
+              <Text style={s.emptyTitle}>No appointment today</Text>
+              <Text style={s.emptyText}>
+                Your family will schedule the next consultation when needed.
+              </Text>
+            </View>
+          ) : null}
+
+          {criticalMeds.length > 0 ? <Text style={s.sectionTitle}>Medicine running low</Text> : null}
+          {criticalMeds.map((medication) => (
+            <ActionCard
+              key={medication.medicationName}
+              urgency="critical"
+              title={medication.medicationName}
+              value={`${medication.daysRemaining} day(s)`}
+              ctaLabel="Tell my family"
+              onPress={() => {}}
+            />
+          ))}
+
+          {warningMeds.length > 0 ? <Text style={s.sectionTitle}>Refill soon</Text> : null}
+          {warningMeds.map((medication) => (
+            <ActionCard
+              key={medication.medicationName}
+              urgency="warning"
+              title={medication.medicationName}
+              value={`${medication.daysRemaining} day(s)`}
+              ctaLabel="Remind family"
+              onPress={() => {}}
+            />
+          ))}
+
+          <Text style={s.logout} onPress={onLogout}>Sign out</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -139,17 +179,91 @@ export const RecipientDashboard: React.FC<Props> = ({ user, onJoinConsultation, 
 };
 
 const s = StyleSheet.create({
-  root:     { flex: 1, backgroundColor: Colors.white },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header:   { padding: Spacing.lg, borderBottomWidth: 2, borderColor: Colors.black, marginBottom: Spacing.sm },
-  greeting: { fontFamily: 'PlayfairDisplay-Bold', fontSize: 28, color: Colors.black, lineHeight: 36 },
-  section:  { fontFamily: 'JetBrainsMono-Regular', fontSize: 11, color: Colors.black,
-              letterSpacing: 1.5, marginLeft: Spacing.md, marginTop: Spacing.lg, marginBottom: 4 },
-  emptyBox: { margin: Spacing.md, borderWidth: 2, borderColor: Colors.trustBlue, padding: Spacing.lg },
-  emptyText:{ fontFamily: 'JetBrainsMono-Regular', fontSize: 14, color: Colors.trustBlue,
-              textAlign: 'center', lineHeight: 22 },
-  logoutRow:{ margin: Spacing.xl, alignItems: 'center' },
-  logout:   { fontFamily: 'JetBrainsMono-Regular', fontSize: 12, color: '#888', textDecorationLine: 'underline' },
+  root: {
+    ...Surfaces.screen,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Colors.background,
+  },
+  content: {
+    padding: Spacing.lg,
+    gap: Spacing.md,
+  },
+  heroCard: {
+    ...Surfaces.card,
+    borderRadius: Radii.xl,
+    gap: Spacing.md,
+  },
+  eyebrow: {
+    ...Typography.label,
+    color: Colors.sageDeep,
+  },
+  greeting: {
+    ...Typography.display,
+    fontSize: 30,
+    lineHeight: 36,
+  },
+  copy: {
+    ...Typography.body,
+    color: Colors.textMuted,
+  },
+  photoPlaceholder: {
+    ...Imagery.placeholder,
+    padding: Spacing.lg,
+    justifyContent: 'flex-end',
+    position: 'relative',
+  },
+  photoGlow: {
+    position: 'absolute',
+    top: -24,
+    right: 0,
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: 'rgba(255,255,255,0.34)',
+  },
+  photoCaption: {
+    ...Surfaces.cardMuted,
+    borderRadius: Radii.lg,
+    backgroundColor: 'rgba(255, 252, 248, 0.78)',
+  },
+  photoCaptionTitle: {
+    ...Typography.subheading,
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  photoCaptionText: {
+    ...Typography.bodySmall,
+    marginTop: 4,
+  },
+  sectionTitle: {
+    ...Typography.label,
+    marginTop: Spacing.sm,
+    marginLeft: Spacing.xs,
+  },
+  emptyCard: {
+    ...Surfaces.cardMuted,
+    borderRadius: Radii.xl,
+  },
+  emptyTitle: {
+    ...Typography.subheading,
+    fontSize: 18,
+    lineHeight: 24,
+  },
+  emptyText: {
+    ...Typography.body,
+    marginTop: 4,
+    color: Colors.textMuted,
+  },
+  logout: {
+    ...Typography.bodySmall,
+    textAlign: 'center',
+    color: Colors.textMuted,
+    marginVertical: Spacing.lg,
+  },
 });
 
 export default RecipientDashboard;

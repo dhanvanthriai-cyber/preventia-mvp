@@ -1,6 +1,6 @@
 /**
  * screens/patient/PatientPharmacyScreen.tsx
- * Project Dhanvanthri — Patient pharmacy / medication orders view
+ * Project Preventia — Patient pharmacy / medication orders view
  */
 
 import React from 'react';

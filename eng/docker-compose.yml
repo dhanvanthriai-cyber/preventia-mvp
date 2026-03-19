@@ -1,5 +1,5 @@
 # ============================================================
-# Project Dhanvanthri — Local Development Stack
+# Project Preventia — Local Development Stack
 # macOS — Podman Desktop (podman compose)
 #
 # Usage:
@@ -25,10 +25,10 @@ services:
   # ----------------------------------------------------------
   postgres:
     image: docker.io/library/postgres:16-alpine
-    container_name: dhanvanthri-postgres
+    container_name: preventia-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB:       dhanvanthri_db
+      POSTGRES_DB:       ${DB_NAME:-preventia_db}
       POSTGRES_USER:     dhan_dev
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
@@ -37,7 +37,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
     mem_limit: 512m
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dhan_dev -d dhanvanthri_db"]
+      test: ["CMD-SHELL", "pg_isready -U dhan_dev -d ${DB_NAME:-preventia_db}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -48,7 +48,7 @@ services:
   # ----------------------------------------------------------
   redis:
     image: docker.io/library/redis:7-alpine
-    container_name: dhanvanthri-redis
+    container_name: preventia-redis
     restart: unless-stopped
     command: redis-server --save "" --appendonly no
     ports:
@@ -64,14 +64,18 @@ services:
       start_period: 10s
 
   # ----------------------------------------------------------
-  # Spring Boot App — Dhanvanthri monolith
+  # Spring Boot App — Preventia monolith
   # Built via multi-stage Dockerfile (Maven → JRE)
   # ----------------------------------------------------------
   app:
     build:
       context: ./
       dockerfile: Dockerfile
-    container_name: dhanvanthri-app
+      args:
+        # Pass CACHE_BUST=$(date +%s) on the CLI to force src recompile:
+        # podman compose build --build-arg CACHE_BUST=$(date +%s) app
+        CACHE_BUST: ${CACHE_BUST:-1}
+    container_name: preventia-app
     restart: unless-stopped
     ports:
       - "8080:8080"
@@ -85,7 +89,7 @@ services:
       # --- JVM tuning ---
       JAVA_OPTS: "-Xms256m -Xmx768m"
       # --- Database ---
-      SPRING_DATASOURCE_URL:      jdbc:postgresql://postgres:5432/dhanvanthri_db
+      SPRING_DATASOURCE_URL:      jdbc:postgresql://postgres:5432/${DB_NAME:-preventia_db}
       SPRING_DATASOURCE_USERNAME: dhan_dev
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       # --- Redis ---
@@ -103,11 +107,16 @@ services:
       AWS_ACCESS_KEY_ID:     ${AWS_ACCESS_KEY_ID:-STUB}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-STUB}
       AWS_REGION:            ${AWS_REGION:-ap-south-1}
-      S3_BUCKET_NAME:        ${S3_BUCKET_NAME:-dhanvanthri-mvp-prescriptions}
+      S3_BUCKET_NAME:        ${S3_BUCKET_NAME:-preventia-mvp-prescriptions}
+      # --- Stream Chat ---
+      STREAM_API_KEY:    ${STREAM_API_KEY:-STUB_KEY}
+      STREAM_API_SECRET: ${STREAM_API_SECRET:-STUB_SECRET}
       # --- Payment gateways ---
       STRIPE_API_KEY:         ${STRIPE_API_KEY:-STUB}
       RAZORPAY_API_KEY:       ${RAZORPAY_API_KEY:-STUB}
       RAZORPAY_API_SECRET:    ${RAZORPAY_API_SECRET:-STUB}
+      # --- Admin bootstrap ---
+      APP_ADMIN_BOOTSTRAP_SECRET: ${APP_ADMIN_BOOTSTRAP_SECRET:-}
       # --- Logging ---
       LOGGING_LEVEL_ROOT: ${LOG_LEVEL:-INFO}
 

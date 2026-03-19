@@ -1,17 +1,17 @@
 /**
  * auth.ts — client-side JWT cookie helpers
  *
- * Utilities for reading/decoding the Dhanvanthri JWT stored in a browser
+ * Utilities for reading/decoding the Preventia JWT stored in a browser
  * cookie.  No verification is done here — the backend owns token validation.
  * These helpers are safe to call from any 'use client' component.
  */
 
-const COOKIE_NAME = 'dhanvanthri_token';
+const COOKIE_NAME = 'preventia_token';
 
 // ─── Cookie I/O ───────────────────────────────────────────────────────────────
 
 /**
- * Returns the raw JWT string from the `dhanvanthri_token` cookie,
+ * Returns the raw JWT string from the `preventia_token` cookie,
  * or null if the cookie is absent (e.g. not logged in / SSR context).
  */
 export function getTokenFromCookie(): string | null {
@@ -50,7 +50,7 @@ export function clearToken(): void {
 
 export interface DecodedToken {
   sub: string;          // email / subject
-  role: string;         // DOCTOR | PHARMACIST | SPONSOR | RECIPIENT
+  role: string;         // DOCTOR | PHARMACIST | SPONSOR | RECIPIENT | ADMIN
   name?: string;
   exp?: number;
   iat?: number;
@@ -88,10 +88,11 @@ export function getCurrentUser(): DecodedToken | null {
 
 export function getDefaultRouteForRole(role: string): string {
   switch (role) {
+    case 'ADMIN':       return '/admin';
     case 'DOCTOR':      return '/doctor';
     case 'PHARMACIST':  return '/pharmacist';
     case 'SPONSOR':     return '/sponsor';
-    case 'RECIPIENT':
-    default:            return '/';
+    case 'RECIPIENT':   return '/patient';
+    default:            return '/patient';
   }
 }

@@ -1,6 +1,6 @@
 /**
  * screens/patient/PatientProfileScreen.tsx
- * Project Dhanvanthri — Patient profile: personal details, proxy access, settings
+ * Project Preventia — Patient profile: personal details, proxy access, settings
  */
 
 import React from 'react';

@@ -1,3 +1,45 @@
-*, *::before, *::after { box-sizing: border-box; }
-body { margin: 0; }
-a { color: #0047AB; }
+@import "tailwindcss";
+
+:root {
+  --app-bg: #f9f8f6;
+  --app-surface: #fffcf8;
+  --app-border: #e7e0d6;
+  --app-text: #2d2d2d;
+  --app-muted: #6f6a63;
+  --app-accent: #879c83;
+  --app-gold: #b89a5f;
+  --app-font: "Inter", "Outfit", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  background:
+    radial-gradient(circle at top left, rgba(255,255,255,0.92), transparent 28%),
+    linear-gradient(180deg, #f8f5ef 0%, var(--app-bg) 38%, #f5f0e7 100%);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--app-font);
+  color: var(--app-text);
+  background: transparent;
+}
+
+a {
+  color: inherit;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(135, 156, 131, 0.2);
+}

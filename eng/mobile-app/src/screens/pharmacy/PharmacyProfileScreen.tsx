@@ -1,6 +1,6 @@
 /**
  * screens/pharmacy/PharmacyProfileScreen.tsx
- * Dhanvanthri — Pharmacy profile and settings
+ * Preventia — Pharmacy profile and settings
  */
 
 import React from 'react';

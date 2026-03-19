@@ -1,5 +1,5 @@
 /**
- * index.ts — Public API of @dhanvanthri/shared
+ * index.ts — Public API of @preventia/shared
  * Re-exports all platform-agnostic logic.
  */
 
@@ -12,5 +12,6 @@ export * from './api/appointments';
 export * from './api/medications';
 
 // Hooks
-export * from './hooks/useAuth';
-export * from './hooks/useDailySession';
+export { useAuth } from './hooks/useAuth';
+export type { UseAuthResult } from './hooks/useAuth';
+export { useDailySession } from './hooks/useDailySession';

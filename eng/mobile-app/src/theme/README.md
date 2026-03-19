@@ -1,8 +1,8 @@
-# Dhanvanthri Design System — Neo-Brutalist Wellness Theme
+# Preventia Design System — Neo-Brutalist Wellness Theme
 
 ## Philosophy
 
-The Dhanvanthri mobile UI blends **Neo-Brutalism** with **Clinical Trustworthiness**.
+The Preventia mobile UI blends **Neo-Brutalism** with **Clinical Trustworthiness**.
 
 > 90% monochromatic (black + white) / 10% Trust Blue (`#0047AB`)
 

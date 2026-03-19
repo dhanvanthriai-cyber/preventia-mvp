@@ -1,8 +1,8 @@
 {
-  "name": "@dhanvanthri/web-app",
+  "name": "@preventia/web-app",
   "version": "0.1.0",
   "private": true,
-  "description": "Project Dhanvanthri — Doctor / Pharmacist / Coach web portal (Next.js)",
+  "description": "Project Preventia — Doctor / Pharmacist / Coach web portal (Next.js)",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -12,12 +12,17 @@
   },
   "dependencies": {
     "@daily-co/daily-js": "^0.70.0",
-    "@dhanvanthri/shared": "file:../shared",
+    "@preventia/shared": "file:../shared",
+    "@tailwindcss/postcss": "^4.2.1",
+    "autoprefixer": "^10.4.27",
+    "lucide-react": "^0.577.0",
     "next": "14.2.3",
+    "postcss": "^8.5.8",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "stream-chat": "^8.40.0",
-    "stream-chat-react": "^12.8.0"
+    "stream-chat-react": "^12.8.0",
+    "tailwindcss": "^4.2.1"
   },
   "devDependencies": {
     "@types/node": "^20.12.7",

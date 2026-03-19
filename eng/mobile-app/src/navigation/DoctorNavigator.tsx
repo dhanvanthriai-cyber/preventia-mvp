@@ -1,6 +1,6 @@
 /**
  * navigation/DoctorNavigator.tsx
- * Project Dhanvanthri — Doctor portal bottom-tab navigator
+ * Project Preventia — Doctor portal bottom-tab navigator
  *
  * Tabs: Dashboard | Appointments | Patients | Notes | Profile
  */

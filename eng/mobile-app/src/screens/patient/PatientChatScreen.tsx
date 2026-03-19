@@ -1,6 +1,6 @@
 /**
  * screens/patient/PatientChatScreen.tsx
- * Project Dhanvanthri — Real-time patient chat via Stream Chat
+ * Project Preventia — Real-time patient chat via Stream Chat
  *
  * Replaces MOCK_THREADS with live Stream Chat channels.
  *

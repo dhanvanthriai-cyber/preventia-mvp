@@ -1,6 +1,6 @@
 /**
  * screens/pharmacy/PharmacyOrdersScreen.tsx
- * Dhanvanthri — Pharmacy incoming orders dashboard
+ * Preventia — Pharmacy incoming orders dashboard
  *
  * Mockup reference: "Provider - Coach Portal.jpeg" (adapted for pharmacy)
  */

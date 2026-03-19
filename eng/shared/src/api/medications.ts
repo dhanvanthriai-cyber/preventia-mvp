@@ -1,6 +1,6 @@
 /**
  * medications.ts — Typed API wrappers for Medication / refill alerts
- * Project Dhanvanthri
+ * Project Preventia
  *
  * Endpoint:
  *  GET /api/v1/patients/{patientId}/medications/alerts → Medication[]

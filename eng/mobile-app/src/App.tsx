@@ -1,12 +1,13 @@
 /**
  * App.tsx — Root navigation shell
- * Project Dhanvanthri | 3-Sided Marketplace
+ * Project Preventia | 3-Sided Marketplace
  *
  * Routes by authenticated user role:
  *   RECIPIENT  → RecipientDashboard → ConsultationScreen
  *   SPONSOR    → SponsorDashboard   → BookAppointmentScreen → ConsultationScreen
  *   DOCTOR     → DoctorDashboard    → ConsultationScreen → SoapNoteScreen → PrescriptionUploadScreen
  *   PHARMACIST → PharmacistPrescriptionQueueScreen
+ *   ADMIN      → web-only admin portal (mobile app falls back to auth)
  *
  * No external navigation library required — plain React state machine.
  * Swap for React Navigation stack when app grows beyond MVP.
@@ -19,7 +20,7 @@
 import React, { useState } from 'react';
 import { View } from 'react-native';
 
-import { AuthUser, useAuth } from '@dhanvanthri/shared';
+import { AuthUser, useAuth } from '@preventia/shared';
 import { AuthScreen }          from './screens/auth/AuthScreen';
 import { RecipientDashboard }  from './screens/recipient/RecipientDashboard';
 import { SponsorDashboard }    from './screens/sponsor/SponsorDashboard';
@@ -61,6 +62,7 @@ export default function App() {
       case 'SPONSOR':     setScreen({ name: 'sponsor-dashboard' });   break;
       case 'DOCTOR':      setScreen({ name: 'doctor-dashboard' });    break;
       case 'PHARMACIST':  setScreen({ name: 'pharmacist-queue' });    break;
+      case 'ADMIN':       setScreen({ name: 'auth' });                break;
     }
   };
 

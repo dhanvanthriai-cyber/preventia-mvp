@@ -1,6 +1,6 @@
 /**
  * useMedicationAlerts.ts
- * Project Dhanvanthri — Pharmacy Screen
+ * Project Preventia — Pharmacy Screen
  *
  * Custom hook: fetches medication refill alerts from the backend
  * and polls every 60 seconds to surface CRITICAL / WARNING urgency items.

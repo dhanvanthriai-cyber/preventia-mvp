@@ -1,6 +1,6 @@
 /**
  * screens/pharmacy/PharmacyCatalogScreen.tsx
- * Dhanvanthri — Medication catalog management
+ * Preventia — Medication catalog management
  */
 
 import React from 'react';

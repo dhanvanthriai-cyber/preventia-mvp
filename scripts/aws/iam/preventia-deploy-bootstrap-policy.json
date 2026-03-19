@@ -1,0 +1,163 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "IdentityCheck",
+      "Effect": "Allow",
+      "Action": "sts:GetCallerIdentity",
+      "Resource": "*"
+    },
+    {
+      "Sid": "EcrBootstrapAndPush",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:GetAuthorizationToken",
+        "ecr:DescribeRepositories",
+        "ecr:CreateRepository",
+        "ecr:TagResource",
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:InitiateLayerUpload",
+        "ecr:UploadLayerPart",
+        "ecr:CompleteLayerUpload",
+        "ecr:PutImage",
+        "ecr:BatchGetImage"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "RdsBootstrap",
+      "Effect": "Allow",
+      "Action": [
+        "rds:DescribeDBInstances",
+        "rds:DescribeDBSubnetGroups",
+        "rds:CreateDBInstance",
+        "rds:CreateDBSubnetGroup",
+        "rds:ModifyDBSubnetGroup",
+        "rds:ModifyDBInstance",
+        "rds:AddTagsToResource"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ElasticacheBootstrap",
+      "Effect": "Allow",
+      "Action": [
+        "elasticache:DescribeCacheClusters",
+        "elasticache:CreateCacheCluster",
+        "elasticache:AddTagsToResource"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "VpcAndNetworking",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeVpcs",
+        "ec2:DescribeSubnets",
+        "ec2:DescribeSecurityGroups",
+        "ec2:DescribeAddresses",
+        "ec2:DescribeNatGateways",
+        "ec2:DescribeRouteTables",
+        "ec2:CreateSecurityGroup",
+        "ec2:AuthorizeSecurityGroupIngress",
+        "ec2:CreateSubnet",
+        "ec2:ModifySubnetAttribute",
+        "ec2:AllocateAddress",
+        "ec2:CreateTags",
+        "ec2:CreateNatGateway",
+        "ec2:CreateRouteTable",
+        "ec2:CreateRoute",
+        "ec2:ReplaceRoute",
+        "ec2:AssociateRouteTable"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "SecretsManagerPreventia",
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:DescribeSecret",
+        "secretsmanager:CreateSecret",
+        "secretsmanager:RestoreSecret",
+        "secretsmanager:UpdateSecret",
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:PutSecretValue",
+        "secretsmanager:TagResource"
+      ],
+      "Resource": [
+        "*",
+        "arn:aws:secretsmanager:ap-south-1:246599827879:secret:preventia/prod/*"
+      ]
+    },
+    {
+      "Sid": "CreatePreventiaAppUser",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetUser",
+        "iam:CreateUser",
+        "iam:PutUserPolicy",
+        "iam:ListAccessKeys",
+        "iam:CreateAccessKey",
+        "iam:TagUser"
+      ],
+      "Resource": "arn:aws:iam::246599827879:user/preventia-app"
+    },
+    {
+      "Sid": "CreateAppRunnerPullRole",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetRole",
+        "iam:CreateRole",
+        "iam:AttachRolePolicy",
+        "iam:PassRole",
+        "iam:TagRole"
+      ],
+      "Resource": "arn:aws:iam::246599827879:role/AppRunnerECRAccessRole-Preventia"
+    },
+    {
+      "Sid": "AllowServiceLinkedRoleBootstrap",
+      "Effect": "Allow",
+      "Action": "iam:CreateServiceLinkedRole",
+      "Resource": "*"
+    },
+    {
+      "Sid": "AppRunnerBootstrapAndDeploy",
+      "Effect": "Allow",
+      "Action": [
+        "apprunner:ListServices",
+        "apprunner:DescribeService",
+        "apprunner:ListOperations",
+        "apprunner:CreateService",
+        "apprunner:UpdateService",
+        "apprunner:DeleteService",
+        "apprunner:ListVpcConnectors",
+        "apprunner:CreateVpcConnector",
+        "apprunner:TagResource"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "PreventiaBucketAndAppAccess",
+      "Effect": "Allow",
+      "Action": [
+        "s3:CreateBucket",
+        "s3:ListBucket",
+        "s3:GetBucketLocation",
+        "s3:PutBucketPublicAccessBlock",
+        "s3:PutEncryptionConfiguration",
+        "s3:PutBucketTagging"
+      ],
+      "Resource": "arn:aws:s3:::preventia-mvp-prescriptions"
+    },
+    {
+      "Sid": "CloudWatchLogsReadForDebugging",
+      "Effect": "Allow",
+      "Action": [
+        "logs:DescribeLogGroups",
+        "logs:DescribeLogStreams",
+        "logs:GetLogEvents"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

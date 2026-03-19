@@ -2,116 +2,118 @@
 /**
  * useConsultationRoom — Daily.co room lifecycle hook (web)
  *
- * Joins a Daily.co room with the doctorToken, listens for:
- *  - joined-meeting  → sets state to ACTIVE
- *  - left-meeting    → calls completeAppointment() → sets local status to LOCKED
- *  - participant-updated → tracks participant count
+ * Uses DailyIframe.createFrame() exclusively — no headless createCallObject().
+ * Having both on the same page causes "Duplicate DailyIframe instances" error.
  *
- * startCamera() is called immediately after createCallObject() to request
- * camera/mic permissions early — before the user clicks JOIN — so the
- * browser permission prompt does not interrupt the join flow.
- *
- * No HMAC here — that's the backend's job.
+ * The frame is attached to the div ref passed in, listens for:
+ *  - joined-meeting      → ACTIVE
+ *  - left-meeting        → completeAppointment() → LOCKED
+ *  - participant-updated → participantCount
+ *  - error               → surfaces error banner
  */
 import { useEffect, useRef, useState, useCallback } from 'react';
-import DailyIframe, { DailyCall } from '@daily-co/daily-js';
-import { completeAppointment } from '@dhanvanthri/shared';
-import type { AppointmentStatus } from '@dhanvanthri/shared';
+import DailyIframe from '@daily-co/daily-js';
+import type { DailyCall } from '@daily-co/daily-js';
+import { getTokenFromCookie } from '@/lib/auth';
+import type { AppointmentStatus } from '@preventia/shared';
+
+/** PUT a state-transition endpoint with the user's JWT — bypasses shared client */
+async function putAppointmentState(appointmentId: number, action: 'activate' | 'complete') {
+  const jwt = getTokenFromCookie();
+  if (!jwt) return;
+  await fetch(`/api/v1/appointments/${appointmentId}/${action}`, {
+    method:  'PUT',
+    headers: { Authorization: `Bearer ${jwt}` },
+  });
+}
+
+export type RoomStatus = AppointmentStatus | 'JOINING' | 'IDLE';
 
 export interface ConsultationRoomState {
-  callObject: DailyCall | null;
-  roomStatus: AppointmentStatus | 'JOINING' | 'IDLE';
+  roomStatus: RoomStatus;
   participantCount: number;
   error: string | null;
 }
 
 export function useConsultationRoom(
+  containerRef: React.RefObject<HTMLDivElement>,
   roomUrl: string | null,
-  doctorToken: string | null,
+  token: string | null,
   appointmentId: number | null,
 ) {
-  const callRef = useRef<DailyCall | null>(null);
+  const frameRef = useRef<DailyCall | null>(null);
   const [state, setState] = useState<ConsultationRoomState>({
-    callObject: null,
     roomStatus: 'IDLE',
     participantCount: 0,
     error: null,
   });
 
   const join = useCallback(async () => {
-    if (!roomUrl || !doctorToken || !appointmentId) return;
-    if (callRef.current) return; // already joined
+    if (!roomUrl || !token || !appointmentId || !containerRef.current) return;
+    if (frameRef.current) return; // already joined
 
     setState(s => ({ ...s, roomStatus: 'JOINING', error: null }));
 
     try {
-      const co = DailyIframe.createCallObject();
-      callRef.current = co;
+      const frame = DailyIframe.createFrame(containerRef.current, {
+        url:                 roomUrl,
+        token:               token,
+        showLeaveButton:     false,
+        showFullscreenButton: true,
+        iframeStyle: {
+          position: 'absolute',
+          top:      '0',
+          left:     '0',
+          width:    '100%',
+          height:   '100%',
+          border:   'none',
+        },
+      });
+      frameRef.current = frame;
 
-      // ── Initialize media devices immediately after createCallObject ──────────
-      // This triggers the browser camera/mic permission prompt before join()
-      // so the user grants access up-front rather than mid-join.
-      try {
-        await co.startCamera();
-      } catch (permErr) {
-        // Permission denied or device unavailable — surface as styled error banner
-        const msg =
-          (permErr as { errorMsg?: string })?.errorMsg ??
-          (permErr instanceof Error ? permErr.message : String(permErr));
-        setState(s => ({
-          ...s,
-          error: `Camera / microphone access denied: ${msg}. Please allow permissions and try again.`,
-          roomStatus: 'IDLE',
-        }));
-        callRef.current?.destroy();
-        callRef.current = null;
-        return;
-      }
-
-      // ── Event listeners ──────────────────────────────────────────────────────
-      co.on('joined-meeting', () => {
-        setState(s => ({ ...s, roomStatus: 'ACTIVE', callObject: co }));
+      frame.on('joined-meeting', () => {
+        setState(s => ({ ...s, roomStatus: 'ACTIVE' }));
+        putAppointmentState(appointmentId, 'activate').catch(e =>
+          console.error('[useConsultationRoom] activate failed:', e)
+        );
       });
 
-      co.on('left-meeting', async () => {
-        // Doctor left — mark appointment COMPLETED on backend, then LOCKED
-        try {
-          await completeAppointment(appointmentId);
-        } catch (e) {
-          console.error('[useConsultationRoom] completeAppointment failed:', e);
-        }
-        setState(s => ({ ...s, roomStatus: 'LOCKED', callObject: null }));
-        callRef.current?.destroy();
-        callRef.current = null;
+      frame.on('left-meeting', async () => {
+        try { await putAppointmentState(appointmentId, 'complete'); }
+        catch (e) { console.error('[useConsultationRoom] complete failed:', e); }
+        setState(s => ({ ...s, roomStatus: 'LOCKED' }));
+        frameRef.current?.destroy();
+        frameRef.current = null;
       });
 
-      co.on('error', (ev) => {
+      frame.on('error', (ev) => {
         const msg = String((ev as { errorMsg?: string })?.errorMsg ?? 'Daily.co error');
         setState(s => ({ ...s, error: msg, roomStatus: 'IDLE' }));
       });
 
-      co.on('participant-updated', () => {
-        const count = Object.keys(co.participants()).length;
+      frame.on('participant-updated', () => {
+        const count = Object.keys(frame.participants() ?? {}).length;
         setState(s => ({ ...s, participantCount: count }));
       });
 
-      await co.join({ url: roomUrl, token: doctorToken });
+      await frame.join({ url: roomUrl, token });
     } catch (e) {
-      setState(s => ({ ...s, error: String(e), roomStatus: 'IDLE' }));
-      callRef.current?.destroy();
-      callRef.current = null;
+      const msg = e instanceof Error ? e.message : String(e);
+      setState(s => ({ ...s, error: msg, roomStatus: 'IDLE' }));
+      frameRef.current?.destroy();
+      frameRef.current = null;
     }
-  }, [roomUrl, doctorToken, appointmentId]);
+  }, [roomUrl, token, appointmentId, containerRef]);
 
   const leave = useCallback(async () => {
-    await callRef.current?.leave();
+    await frameRef.current?.leave();
   }, []);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      callRef.current?.destroy();
-      callRef.current = null;
+      frameRef.current?.destroy();
+      frameRef.current = null;
     };
   }, []);
 

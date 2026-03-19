@@ -1,6 +1,6 @@
 /**
  * index.js
- * Project Dhanvanthri — React Native entry point
+ * Project Preventia — React Native entry point
  */
 
 import { registerRootComponent } from 'expo';

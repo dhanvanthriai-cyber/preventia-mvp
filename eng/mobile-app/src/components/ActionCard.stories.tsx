@@ -1,6 +1,6 @@
 /**
  * ActionCard.stories.tsx
- * Project Dhanvanthri — Storybook stories for ActionCard
+ * Project Preventia — Storybook stories for ActionCard
  *
  * NOTE: Storybook (@storybook/react-native) was not detected in
  * node_modules at generation time. These stories follow the
@@ -20,7 +20,7 @@ import { ActionCard } from './ActionCard';
 // ─── Meta ─────────────────────────────────────────────────────────────────────
 
 const meta: Meta<typeof ActionCard> = {
-  title: 'Dhanvanthri/ActionCard',
+  title: 'Preventia/ActionCard',
   component: ActionCard,
   decorators: [
     (Story) => (
@@ -67,7 +67,7 @@ export const NormalCard: Story = {
 /**
  * WarningCard — Amber #FFC107 background, black text
  * Use case: medication refill required in 5 days.
- * Maps to alertYellow in the Dhanvanthri colour palette.
+ * Maps to alertYellow in the Preventia colour palette.
  */
 export const WarningCard: Story = {
   args: {

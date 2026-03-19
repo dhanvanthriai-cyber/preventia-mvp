@@ -1,6 +1,6 @@
 /**
  * App.tsx
- * Project Dhanvanthri — Root application component
+ * Project Preventia — Root application component
  *
  * Wraps the entire app in NavigationContainer and renders the RootNavigator.
  * react-native-screens and react-native-safe-area-context must be set up

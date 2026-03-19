@@ -1,6 +1,6 @@
 -- =============================================================================
 -- V2__Appointments_Clinical_Pharmacy.sql
--- Project Dhanvanthri — Medications, Inventory Audit Log
+-- Project Preventia — Medications, Inventory Audit Log
 -- Database: PostgreSQL 16
 -- Migration Tool: Flyway (managed; never edit after commit to version control)
 --

@@ -1,17 +1,3 @@
-/**
- * ActionCard — Neo-Brutalist Wellness sticky component
- * Project Dhanvanthri
- *
- * Design spec:
- *  - urgency="normal"   → Trust Blue (#0047AB) background, white text
- *  - urgency="warning"  → Amber (#FFC107) background, black text
- *  - urgency="critical" → Red (#D32F2F) background, white text
- *  - Border: 2px solid #000 (Neo-Brutalist — zero border-radius)
- *  - Shadow: 8px soft diffusion
- *  - isSticky=true → position:absolute, top:0, full-width
- *  - Typography: Playfair Display (title) + JetBrains Mono (value/subtitle)
- */
-
 import React from 'react';
 import {
   Pressable,
@@ -20,11 +6,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
-import { Colors, Shadows, Spacing, Typography } from '../theme/theme';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+import { Buttons, Colors, Radii, Shadows, Spacing, Typography } from '../theme/theme';
 
 export type ActionCardUrgency = 'normal' | 'warning' | 'critical';
 
@@ -41,19 +23,35 @@ export interface ActionCardProps {
   style?: ViewStyle;
 }
 
-// ---------------------------------------------------------------------------
-// Urgency map
-// ---------------------------------------------------------------------------
-
-const URGENCY_STYLES: Record<ActionCardUrgency, { bg: string; text: string; ctaBg: string; ctaText: string }> = {
-  normal:   { bg: Colors.trustBlue,   text: Colors.white, ctaBg: Colors.white, ctaText: Colors.trustBlue },
-  warning:  { bg: Colors.alertYellow, text: Colors.black, ctaBg: Colors.black, ctaText: Colors.white },
-  critical: { bg: Colors.alertRed,    text: Colors.white, ctaBg: Colors.white, ctaText: Colors.alertRed },
+const URGENCY_STYLES: Record<
+  ActionCardUrgency,
+  { bg: string; border: string; title: string; body: string; ctaBg: string; ctaText: string }
+> = {
+  normal: {
+    bg: Colors.surface,
+    border: Colors.border,
+    title: Colors.text,
+    body: Colors.textMuted,
+    ctaBg: Colors.sage,
+    ctaText: Colors.white,
+  },
+  warning: {
+    bg: Colors.goldTint,
+    border: 'rgba(184, 154, 95, 0.22)',
+    title: Colors.text,
+    body: '#8C6F37',
+    ctaBg: Colors.surface,
+    ctaText: Colors.text,
+  },
+  critical: {
+    bg: Colors.roseTint,
+    border: 'rgba(199, 131, 117, 0.22)',
+    title: Colors.text,
+    body: Colors.rose,
+    ctaBg: Colors.surface,
+    ctaText: Colors.rose,
+  },
 };
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 export const ActionCard: React.FC<ActionCardProps> = ({
   title,
@@ -67,7 +65,7 @@ export const ActionCard: React.FC<ActionCardProps> = ({
   testID,
   style,
 }) => {
-  const c = URGENCY_STYLES[urgency];
+  const colors = URGENCY_STYLES[urgency];
 
   return (
     <Pressable
@@ -79,106 +77,88 @@ export const ActionCard: React.FC<ActionCardProps> = ({
       style={({ pressed }) => [
         styles.card,
         isSticky && styles.sticky,
-        { backgroundColor: c.bg, opacity: pressed ? 0.88 : disabled ? 0.45 : 1 },
+        {
+          backgroundColor: colors.bg,
+          borderColor: colors.border,
+          opacity: pressed ? 0.92 : disabled ? 0.52 : 1,
+          transform: [{ scale: pressed ? 0.995 : 1 }],
+        },
         style,
       ]}
     >
-      {/* Top row: title + value */}
       <View style={styles.topRow}>
-        <Text style={[styles.title, { color: c.text }]} numberOfLines={1}>
-          {title}
-        </Text>
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text style={[styles.title, { color: colors.title }]} numberOfLines={2}>
+            {title}
+          </Text>
+          {subtitle ? (
+            <Text style={[styles.subtitle, { color: colors.body }]} numberOfLines={2}>
+              {subtitle}
+            </Text>
+          ) : null}
+        </View>
+
         {value ? (
-          <Text style={[styles.value, { color: c.text }]}>{value}</Text>
+          <Text style={[styles.value, { color: colors.body }]}>{value}</Text>
         ) : null}
       </View>
 
-      {/* Subtitle */}
-      {subtitle ? (
-        <Text style={[styles.subtitle, { color: c.text }]} numberOfLines={2}>
-          {subtitle}
-        </Text>
-      ) : null}
-
-      {/* CTA button */}
       {ctaLabel ? (
-        <View style={[styles.ctaBtn, { backgroundColor: c.ctaBg, borderColor: c.text }]}>
-          <Text style={[styles.ctaText, { color: c.ctaText }]}>{ctaLabel}</Text>
+        <View style={[styles.ctaBtn, { backgroundColor: colors.ctaBg }]}>
+          <Text style={[styles.ctaText, { color: colors.ctaText }]}>{ctaLabel}</Text>
         </View>
       ) : null}
     </Pressable>
   );
 };
 
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
-
 const styles = StyleSheet.create({
   card: {
     ...Shadows.card,
-    borderWidth: 2,
-    borderColor: Colors.black,
-    borderRadius: 0,
-    padding: Spacing.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radii.xl,
+    padding: Spacing.lg,
     marginHorizontal: Spacing.md,
     marginVertical: Spacing.sm,
+    gap: Spacing.md,
   } as ViewStyle,
 
   sticky: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    marginHorizontal: 0,
-    marginVertical: 0,
-    zIndex: 10,
+    marginTop: Spacing.sm,
   } as ViewStyle,
 
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 4,
+    gap: Spacing.md,
   },
 
   title: {
-    fontFamily: Typography.heading.fontFamily,
-    fontSize: 17,
-    fontWeight: '700',
-    flex: 1,
-    marginRight: Spacing.sm,
-  },
-
-  value: {
-    fontFamily: Typography.value.fontFamily,
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    textAlign: 'right',
+    ...Typography.subheading,
+    flexShrink: 1,
   },
 
   subtitle: {
-    fontFamily: Typography.valueSmall.fontFamily,
-    fontSize: 12,
-    opacity: 0.88,
-    marginBottom: Spacing.sm,
+    ...Typography.bodySmall,
+  },
+
+  value: {
+    ...Typography.body,
+    fontWeight: '600',
+    textAlign: 'right',
   },
 
   ctaBtn: {
-    marginTop: Spacing.sm,
+    ...Buttons.secondary,
     alignSelf: 'flex-start',
-    borderWidth: 2,
     paddingHorizontal: Spacing.md,
-    paddingVertical: 6,
+    paddingVertical: 10,
   },
 
   ctaText: {
-    fontFamily: Typography.value.fontFamily,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+    ...Typography.bodySmall,
+    fontWeight: '600',
   },
 });
 

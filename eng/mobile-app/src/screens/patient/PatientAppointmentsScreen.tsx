@@ -1,6 +1,6 @@
 /**
  * screens/patient/PatientAppointmentsScreen.tsx
- * Project Dhanvanthri — Patient appointments list + booking entry
+ * Project Preventia — Patient appointments list + booking entry
  */
 
 import React from 'react';

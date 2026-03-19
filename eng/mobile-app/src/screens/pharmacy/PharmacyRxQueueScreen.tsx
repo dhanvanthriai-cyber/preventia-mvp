@@ -1,6 +1,6 @@
 /**
  * screens/pharmacy/PharmacyRxQueueScreen.tsx
- * Dhanvanthri — Pharmacy Rx verification queue
+ * Preventia — Pharmacy Rx verification queue
  */
 
 import React from 'react';

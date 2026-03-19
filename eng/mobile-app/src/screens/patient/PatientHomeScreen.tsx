@@ -1,6 +1,6 @@
 /**
  * screens/patient/PatientHomeScreen.tsx
- * Project Dhanvanthri — Patient home dashboard
+ * Project Preventia — Patient home dashboard
  *
  * Mockup reference: "User Mobile view.jpeg"
  * Shows: urgent sticky banner, upcoming appointments, action cards.

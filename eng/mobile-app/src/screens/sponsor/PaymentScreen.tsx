@@ -1,45 +1,45 @@
-/**
- * PaymentScreen.tsx — Razorpay embedded checkout (Sponsor flow)
- * Project Dhanvanthri | Neo-Brutalist Wellness
- *
- * Opens Razorpay checkout in a WebView. Intercepts navigation to detect
- * payment success (URL contains razorpay_payment_id) or failure.
- *
- * STUB mode: when orderId starts with "order_STUB_", renders a mock success
- * UI so the flow can be tested without live Razorpay credentials.
- */
 import React, { useState } from 'react';
 import {
-  ActivityIndicator, BackHandler, Platform, Pressable,
-  SafeAreaView, StyleSheet, Text, View,
+  ActivityIndicator,
+  BackHandler,
+  Pressable,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 import { WebView, WebViewNavigation } from 'react-native-webview';
 import { useFocusEffect } from '@react-navigation/native';
-import { Colors, Spacing, Typography } from '../../theme/theme';
+import { Buttons, Colors, Radii, Spacing, Surfaces, Typography } from '../../theme/theme';
 
 interface Props {
-  orderId:       string;
-  amount:        number;   // paise
-  currency:      string;
-  description:   string;
+  orderId: string;
+  amount: number;
+  currency: string;
+  description: string;
   appointmentId: number;
-  onSuccess:     (paymentId: string) => void;
-  onCancel:      () => void;
+  onSuccess: (paymentId: string) => void;
+  onCancel: () => void;
 }
 
 const CHECKOUT_URL = 'https://api.razorpay.com/v1/checkout/embedded';
 const RAZORPAY_KEY = process.env.REACT_NATIVE_RAZORPAY_KEY ?? 'rzp_test_STUB';
 
 export const PaymentScreen: React.FC<Props> = ({
-  orderId, amount, currency, description, onSuccess, onCancel,
+  orderId,
+  amount,
+  currency,
+  description,
+  onSuccess,
+  onCancel,
 }) => {
   const [loading, setLoading] = useState(true);
   const isStub = orderId.startsWith('order_STUB_');
 
-  // Android back-button → cancel
   useFocusEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      onCancel(); return true;
+      onCancel();
+      return true;
     });
     return () => sub.remove();
   });
@@ -58,52 +58,55 @@ export const PaymentScreen: React.FC<Props> = ({
     }
   };
 
-  // ── STUB mode — simulated payment UI ─────────────────────────────────────
   if (isStub) {
     return (
       <SafeAreaView style={s.root}>
-        <View style={s.header}>
-          <Text style={s.headerTitle}>PAYMENT (STUB MODE)</Text>
-          <Pressable onPress={onCancel}><Text style={s.cancelBtn}>CANCEL</Text></Pressable>
-        </View>
-        <View style={s.stubBody}>
-          <Text style={s.stubAmount}>₹{(amount / 100).toLocaleString('en-IN')}</Text>
-          <Text style={s.stubDesc}>{description}</Text>
-          <Text style={s.stubNote}>
-            Razorpay credentials not configured.{'\n'}
-            Add RAZORPAY_API_KEY to .env to enable live payments.
-          </Text>
-          <Pressable style={s.stubSuccessBtn} onPress={() => onSuccess('pay_STUB_' + Date.now())}>
-            <Text style={s.stubSuccessBtnText}>SIMULATE PAYMENT SUCCESS</Text>
+        <View style={s.card}>
+          <Text style={s.eyebrow}>Payment preview</Text>
+          <Text style={s.amount}>₹{(amount / 100).toLocaleString('en-IN')}</Text>
+          <Text style={s.description}>{description}</Text>
+          <View style={s.noteBox}>
+            <Text style={s.noteTitle}>Stub mode</Text>
+            <Text style={s.noteText}>
+              Add Razorpay credentials to enable the live checkout experience.
+            </Text>
+          </View>
+          <Pressable style={s.primaryBtn} onPress={() => onSuccess(`pay_STUB_${Date.now()}`)}>
+            <Text style={s.primaryBtnText}>Simulate payment success</Text>
+          </Pressable>
+          <Pressable style={s.secondaryBtn} onPress={onCancel}>
+            <Text style={s.secondaryBtnText}>Cancel</Text>
           </Pressable>
         </View>
       </SafeAreaView>
     );
   }
 
-  // ── Live Razorpay WebView ─────────────────────────────────────────────────
   return (
     <SafeAreaView style={s.root}>
-      <View style={s.header}>
-        <View>
-          <Text style={s.headerTitle}>PAYMENT</Text>
-          <Text style={s.headerSub}>
-            {currency} ₹{(amount / 100).toLocaleString('en-IN')} · {description}
+      <View style={s.webHeader}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.eyebrow}>Payment</Text>
+          <Text style={s.headerTitle}>
+            {currency} ₹{(amount / 100).toLocaleString('en-IN')}
           </Text>
+          <Text style={s.headerCopy}>{description}</Text>
         </View>
-        <Pressable onPress={onCancel}><Text style={s.cancelBtn}>CANCEL</Text></Pressable>
+        <Pressable style={s.secondaryBtnSmall} onPress={onCancel}>
+          <Text style={s.secondaryBtnText}>Cancel</Text>
+        </Pressable>
       </View>
 
-      {loading && (
+      {loading ? (
         <View style={s.loaderOverlay}>
-          <ActivityIndicator size="large" color={Colors.trustBlue} />
-          <Text style={s.loaderText}>LOADING PAYMENT…</Text>
+          <ActivityIndicator size="large" color={Colors.sage} />
+          <Text style={s.loaderText}>Loading secure payment…</Text>
         </View>
-      )}
+      ) : null}
 
       <WebView
         source={{ uri: checkoutUrl }}
-        style={{ flex: 1 }}
+        style={{ flex: 1, backgroundColor: Colors.background }}
         onLoadEnd={() => setLoading(false)}
         onNavigationStateChange={handleNavChange}
         javaScriptEnabled
@@ -114,26 +117,93 @@ export const PaymentScreen: React.FC<Props> = ({
 };
 
 const s = StyleSheet.create({
-  root:       { flex: 1, backgroundColor: Colors.white },
-  header:     {
-    backgroundColor: Colors.black, padding: Spacing.md,
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    borderBottomWidth: 3, borderBottomColor: Colors.black,
+  root: {
+    ...Surfaces.screen,
   },
-  headerTitle:  { color: Colors.white, fontFamily: 'JetBrainsMono-Regular', fontSize: 14, fontWeight: '700', letterSpacing: 2 },
-  headerSub:    { color: '#aaa', fontFamily: 'JetBrainsMono-Regular', fontSize: 11, marginTop: 2 },
-  cancelBtn:    { color: Colors.alertRed, fontFamily: 'JetBrainsMono-Regular', fontSize: 12, fontWeight: '700' },
-  loaderOverlay:{ position: 'absolute', top: 80, left: 0, right: 0, alignItems: 'center', zIndex: 10, gap: 8 },
-  loaderText:   { fontFamily: 'JetBrainsMono-Regular', fontSize: 11, color: '#666' },
-  // Stub mode styles
-  stubBody:     { flex: 1, padding: Spacing.lg, alignItems: 'center', justifyContent: 'center', gap: Spacing.md },
-  stubAmount:   { fontFamily: 'PlayfairDisplay-Bold', fontSize: 36, color: Colors.black },
-  stubDesc:     { fontFamily: 'JetBrainsMono-Regular', fontSize: 13, color: '#555', textAlign: 'center' },
-  stubNote:     { fontFamily: 'JetBrainsMono-Regular', fontSize: 11, color: '#888', textAlign: 'center',
-                  borderWidth: 2, borderColor: '#FFC107', padding: Spacing.md, backgroundColor: '#FFF3CD' },
-  stubSuccessBtn:     { backgroundColor: Colors.black, borderWidth: 2, borderColor: Colors.black,
-                        padding: Spacing.md, alignItems: 'center', marginTop: Spacing.md, width: '100%' },
-  stubSuccessBtnText: { color: Colors.white, fontFamily: 'JetBrainsMono-Regular', fontSize: 13, fontWeight: '700', letterSpacing: 2 },
+  card: {
+    ...Surfaces.card,
+    borderRadius: Radii.xl,
+    margin: Spacing.lg,
+    gap: Spacing.md,
+    justifyContent: 'center',
+    flex: 1,
+  },
+  webHeader: {
+    ...Surfaces.card,
+    borderRadius: Radii.xl,
+    margin: Spacing.lg,
+    marginBottom: Spacing.md,
+    flexDirection: 'row',
+    gap: Spacing.md,
+    alignItems: 'flex-start',
+  },
+  eyebrow: {
+    ...Typography.label,
+    color: Colors.sageDeep,
+  },
+  headerTitle: {
+    ...Typography.heading,
+    marginTop: 4,
+  },
+  headerCopy: {
+    ...Typography.bodySmall,
+    marginTop: 4,
+  },
+  amount: {
+    ...Typography.display,
+    fontSize: 36,
+    lineHeight: 42,
+  },
+  description: {
+    ...Typography.body,
+    color: Colors.textMuted,
+  },
+  noteBox: {
+    ...Surfaces.cardMuted,
+    borderRadius: Radii.lg,
+    backgroundColor: Colors.goldTint,
+  },
+  noteTitle: {
+    ...Typography.subheading,
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  noteText: {
+    ...Typography.bodySmall,
+    marginTop: 4,
+  },
+  primaryBtn: {
+    ...Buttons.primary,
+  },
+  primaryBtnText: {
+    ...Typography.button,
+  },
+  secondaryBtn: {
+    ...Buttons.secondary,
+  },
+  secondaryBtnSmall: {
+    ...Buttons.secondary,
+    alignSelf: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: Spacing.md,
+  },
+  secondaryBtnText: {
+    ...Typography.bodySmall,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  loaderOverlay: {
+    position: 'absolute',
+    top: 120,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 10,
+    gap: Spacing.sm,
+  },
+  loaderText: {
+    ...Typography.bodySmall,
+  },
 });
 
 export default PaymentScreen;

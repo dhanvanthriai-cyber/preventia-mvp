@@ -1,5 +1,48 @@
-.git
-target/
-*.md
-.env*
+# eng/.dockerignore — applies to all docker/podman builds from the eng/ context
+# Excludes large directories that are not needed in the build
+
+# Node dependencies (rebuilt inside the image)
+node_modules/
+web-app/node_modules/
+shared/node_modules/
+mobile-app/node_modules/
+
+# Next.js build output (rebuilt inside the image)
+web-app/.next/
+web-app/out/
+
+# Test / coverage
+**/__tests__/
+**/coverage/
+**/*.test.ts
+**/*.spec.ts
+
+# Local dev files
+.env
+.env.*
+!.env.example
+
+# Git
+.git/
+.gitignore
+
+# Logs
 **/*.log
+**/logs/
+
+# Maven build output (Spring Boot — handled by its own Dockerfile stage)
+target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Explicitly exclude .babelrc — we use SWC, not Babel, in production builds
+web-app/.babelrc
+web-app/babel.config.*
+

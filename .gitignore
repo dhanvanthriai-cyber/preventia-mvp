@@ -21,3 +21,9 @@ hs_err_pid*
 .factorypath
 node_modules/
 .expo/
+.next/
+dist/
+.env.local
+.env.aws
+*.tsbuildinfo
+.DS_Store

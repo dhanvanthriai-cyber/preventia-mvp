@@ -1,6 +1,6 @@
 /**
  * screens/doctor/DoctorDashboardScreen.tsx
- * Project Dhanvanthri — Doctor's today queue / dashboard
+ * Project Preventia — Doctor's today queue / dashboard
  *
  * Mockup reference: "Provider - Doctor Portal.jpeg"
  */

@@ -1,6 +1,6 @@
 -- =============================================================================
 -- V5__appointments.sql
--- Project Dhanvanthri — Appointments Table
+-- Project Preventia — Appointments Table
 -- Database: PostgreSQL 16
 -- Migration Tool: Flyway (managed; never edit after commit to version control)
 -- Region: AWS Mumbai (ap-south-1) — PHI data residency per DPDP Act 2023

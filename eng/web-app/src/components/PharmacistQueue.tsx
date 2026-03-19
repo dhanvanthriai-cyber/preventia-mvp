@@ -2,7 +2,7 @@
 
 /**
  * PharmacistQueue.tsx — Pharmacist prescription review queue (web)
- * Project Dhanvanthri | Neo-Brutalist Wellness
+ * Project Preventia | Neo-Brutalist Wellness
  *
  * Ported from PharmacistPrescriptionQueueScreen.tsx — HTML divs instead of RN.
  *
@@ -16,6 +16,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
+import { getTokenFromCookie } from '../lib/auth';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -38,13 +39,21 @@ interface PrescriptionQueueItem {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const API_BASE =
-  (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_BASE_URL) ||
-  'http://localhost:8080';
+const API_BASE = '';   // relative — proxied by Next.js rewrite (/api/* → localhost:8080)
 const API_V1 = `${API_BASE}/api/v1`;
 const POLL_INTERVAL_MS = 60_000;
 const SLA_HOURS = 4;
 const SLA_ALERT_THRESHOLD_HOURS = 1;
+
+/** Returns headers including the Authorization bearer token from cookie */
+function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  const token = getTokenFromCookie();
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...extra,
+  };
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -75,7 +84,7 @@ export default function PharmacistQueue() {
     if (isRefresh) setRefreshing(true);
     try {
       const res = await fetch(`${API_V1}/prescriptions/queue`, {
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: PrescriptionQueueItem[] = await res.json();
@@ -111,6 +120,7 @@ export default function PharmacistQueue() {
     try {
       const res = await fetch(
         `${API_V1}/prescriptions/view?s3Key=${encodeURIComponent(s3Key)}`,
+        { headers: authHeaders() },
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const { presignedUrl }: { presignedUrl: string } = await res.json();
@@ -130,7 +140,7 @@ export default function PharmacistQueue() {
           `${API_V1}/prescriptions/${item.soapNoteId}/approve`,
           {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: authHeaders(),
             body: JSON.stringify({ pharmacistId: 'CURRENT_USER_ID' }),
           },
         );
@@ -155,7 +165,7 @@ export default function PharmacistQueue() {
           `${API_V1}/prescriptions/${item.soapNoteId}/reject`,
           {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: authHeaders(),
             body: JSON.stringify({ pharmacistId: 'CURRENT_USER_ID', reason }),
           },
         );
@@ -180,7 +190,7 @@ export default function PharmacistQueue() {
           `${API_V1}/prescriptions/${item.soapNoteId}/clarify`,
           {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: authHeaders(),
             body: JSON.stringify({ pharmacistId: 'CURRENT_USER_ID', message }),
           },
         );

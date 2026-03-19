@@ -1,6 +1,6 @@
 -- ============================================================
 -- V5__payments.sql
--- Project Dhanvanthri — Multi-currency payment support
+-- Project Preventia — Multi-currency payment support
 -- Dual gateway: Stripe (USD/NRI sponsors) + Razorpay (INR/India)
 -- ============================================================
 

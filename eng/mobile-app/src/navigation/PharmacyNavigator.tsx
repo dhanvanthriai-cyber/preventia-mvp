@@ -1,6 +1,6 @@
 /**
  * navigation/PharmacyNavigator.tsx
- * Project Dhanvanthri — Pharmacy portal bottom-tab navigator
+ * Project Preventia — Pharmacy portal bottom-tab navigator
  *
  * Tabs: Orders | Rx Queue | Catalog | Profile
  */

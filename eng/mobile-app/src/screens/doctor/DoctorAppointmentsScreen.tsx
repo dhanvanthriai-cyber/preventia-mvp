@@ -1,6 +1,6 @@
 /**
  * screens/doctor/DoctorAppointmentsScreen.tsx
- * Dhanvanthri — Doctor's full schedule view
+ * Preventia — Doctor's full schedule view
  */
 
 import React from 'react';

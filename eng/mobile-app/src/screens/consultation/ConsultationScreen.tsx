@@ -1,6 +1,6 @@
 /**
  * ConsultationScreen.tsx
- * Project Dhanvanthri — Virtual Consultation Room
+ * Project Preventia — Virtual Consultation Room
  *
  * Mockup reference: "Virtual consultation Room.jpeg"
  * Design: Neo-Brutalist Wellness — black video area, Trust Blue CTA,
@@ -20,7 +20,7 @@ import {
   View,
 } from 'react-native';
 import { Colors, Shadows, Spacing, Typography } from '../../theme/theme';
-import { useDailySession } from '@dhanvanthri/shared';
+import { useDailySession } from '@preventia/shared';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 

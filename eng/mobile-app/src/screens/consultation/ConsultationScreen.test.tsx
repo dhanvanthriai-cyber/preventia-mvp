@@ -1,6 +1,6 @@
 /**
  * ConsultationScreen.test.tsx
- * Project Dhanvanthri — Smoke tests for the Virtual Consultation Room
+ * Project Preventia — Smoke tests for the Virtual Consultation Room
  *
  * Jest + React Native Testing Library
  */
@@ -56,7 +56,7 @@ jest.mock('./useDailySession', () => ({
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const DEFAULT_PROPS = {
-  roomUrl: 'https://dhanvanthri.daily.co/test-room',
+  roomUrl: 'https://preventia.daily.co/test-room',
   token: 'test-token-abc123',
   appointmentId: 42,
   onSessionEnd: jest.fn(),

@@ -1,6 +1,6 @@
 /**
  * navigation/types.ts
- * Project Dhanvanthri — Centralised navigation type definitions
+ * Project Preventia — Centralised navigation type definitions
  *
  * Three role-based portal trees:
  *   1. Patient  — bottom-tab: Home | Appointments | Chat | Pharmacy | Profile

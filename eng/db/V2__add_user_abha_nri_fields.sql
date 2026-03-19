@@ -1,6 +1,6 @@
 -- ============================================================
 -- V2__add_user_abha_nri_fields.sql
--- Project Dhanvanthri · Flyway Migration V2
+-- Project Preventia · Flyway Migration V2
 -- ============================================================
 --
 -- PURPOSE

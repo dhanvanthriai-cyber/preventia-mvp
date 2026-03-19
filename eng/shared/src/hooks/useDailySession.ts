@@ -1,6 +1,6 @@
 /**
  * useDailySession.ts
- * Project Dhanvanthri — Daily.co session management hook
+ * Project Preventia — Daily.co session management hook
  *
  * Uses @daily-co/daily-js (web SDK — works in Expo web + Expo Go).
  * Handles participant events and calls backend appointment endpoints:
@@ -18,7 +18,7 @@ interface UseDailySessionOptions {
   roomUrl: string;
   token: string;
   appointmentId: number;
-  /** Base URL for the Dhanvanthri Spring Boot API (defaults to env var). */
+  /** Base URL for the Preventia Spring Boot API (defaults to env var). */
   apiBaseUrl?: string;
 }
 

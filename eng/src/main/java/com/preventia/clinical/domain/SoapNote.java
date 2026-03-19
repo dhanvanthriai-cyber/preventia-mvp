@@ -1,7 +1,12 @@
 package com.preventia.clinical.domain;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * SOAP-structured clinical note. Schema is FHIR R4 / ABDM-aligned.
@@ -44,9 +49,18 @@ public class SoapNote {
     @Column(name = "session_token")
     private String sessionToken;
 
-    /** S3 key for uploaded Prescription PDF (MVP shortcut §3). */
+    /** S3 key for the primary/first uploaded Prescription PDF (backward-compat canonical key). */
     @Column(name = "prescription_s3_key")
     private String prescriptionS3Key;
+
+    /**
+     * All S3 keys for this prescription's uploaded files, in upload order.
+     * Index 0 always mirrors {@code prescriptionS3Key}.
+     * Populated by V14__prescription_multi_file.sql.
+     */
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "prescription_s3_keys", columnDefinition = "TEXT[]")
+    private List<String> prescriptionS3Keys = new ArrayList<>();
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
@@ -60,16 +74,18 @@ public class SoapNote {
     public String getAssessment()        { return assessment; }
     public String getPlan()              { return plan; }
     public String getSessionToken()      { return sessionToken; }
-    public String getPrescriptionS3Key() { return prescriptionS3Key; }
-    public Instant getCreatedAt()        { return createdAt; }
+    public String getPrescriptionS3Key()       { return prescriptionS3Key; }
+    public List<String> getPrescriptionS3Keys() { return prescriptionS3Keys; }
+    public Instant getCreatedAt()              { return createdAt; }
 
     // ── Setters ──────────────────────────────────────────────────────────────
-    public void setPatientId(Long patientId)                   { this.patientId = patientId; }
-    public void setDoctorId(Long doctorId)                     { this.doctorId = doctorId; }
-    public void setSubjective(String subjective)               { this.subjective = subjective; }
-    public void setObjective(String objective)                 { this.objective = objective; }
-    public void setAssessment(String assessment)               { this.assessment = assessment; }
-    public void setPlan(String plan)                           { this.plan = plan; }
-    public void setSessionToken(String sessionToken)           { this.sessionToken = sessionToken; }
-    public void setPrescriptionS3Key(String prescriptionS3Key){ this.prescriptionS3Key = prescriptionS3Key; }
+    public void setPatientId(Long patientId)                         { this.patientId = patientId; }
+    public void setDoctorId(Long doctorId)                           { this.doctorId = doctorId; }
+    public void setSubjective(String subjective)                     { this.subjective = subjective; }
+    public void setObjective(String objective)                       { this.objective = objective; }
+    public void setAssessment(String assessment)                     { this.assessment = assessment; }
+    public void setPlan(String plan)                                 { this.plan = plan; }
+    public void setSessionToken(String sessionToken)                 { this.sessionToken = sessionToken; }
+    public void setPrescriptionS3Key(String prescriptionS3Key)       { this.prescriptionS3Key = prescriptionS3Key; }
+    public void setPrescriptionS3Keys(List<String> keys)             { this.prescriptionS3Keys = keys != null ? keys : new ArrayList<>(); }
 }

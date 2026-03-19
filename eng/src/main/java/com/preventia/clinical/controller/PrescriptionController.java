@@ -12,6 +12,8 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -19,12 +21,19 @@ import java.util.Map;
  * Manages prescription PDF upload, secure access, and pharmacist review actions.
  *
  * Endpoints:
- *  POST /api/v1/appointments/{id}/prescription          — DOCTOR: upload PDF
- *  GET  /api/v1/appointments/{id}/prescription/view     — DOCTOR|SPONSOR|PHARMACIST: presigned URL
+ *  POST /api/v1/appointments/{id}/prescription          — DOCTOR: upload one or more PDFs (multipart)
+ *  GET  /api/v1/appointments/{id}/prescription/view     — DOCTOR|SPONSOR|PHARMACIST: presigned URL (primary file)
+ *  GET  /api/v1/appointments/{id}/prescription/files    — DOCTOR|SPONSOR|PHARMACIST: presigned URLs for all files
  *  GET  /api/v1/prescriptions/queue                     — PHARMACIST: pending review queue
  *  POST /api/v1/prescriptions/{id}/approve              — PHARMACIST: approve
  *  POST /api/v1/prescriptions/{id}/reject               — PHARMACIST: reject (reason required)
  *  POST /api/v1/prescriptions/{id}/clarify              — PHARMACIST: request clarification
+ *
+ * Multi-file upload:
+ *  Accepts field name "files" (multiple) or legacy "file" (single) — both are valid.
+ *  The first file in the batch is stored as the canonical prescription_s3_key.
+ *  All keys are stored in prescription_s3_keys (TEXT[]) added in V14.
+ *  Max files per upload: 5. Accepted MIME types: application/pdf, image/jpeg, image/png.
  */
 @RestController
 public class PrescriptionController {
@@ -42,41 +51,129 @@ public class PrescriptionController {
     }
 
     // -------------------------------------------------------------------------
-    // Upload prescription PDF (DOCTOR)
+    // Upload prescription PDFs (DOCTOR) — supports 1..5 files per request
+    // Accepts field name "files" (multi) or legacy "file" (single).
     // -------------------------------------------------------------------------
+
+    private static final int    MAX_FILES          = 5;
+    private static final long   MAX_FILE_BYTES     = 10 * 1024 * 1024L; // 10 MB per file
+    private static final List<String> ALLOWED_TYPES = List.of(
+            "application/pdf", "image/jpeg", "image/png");
 
     @PostMapping(value = "/api/v1/appointments/{appointmentId}/prescription",
                  consumes = "multipart/form-data")
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasRole('DOCTOR')")
-    public ResponseEntity<Map<String, String>> uploadPrescription(
+    public ResponseEntity<Map<String, Object>> uploadPrescription(
             @PathVariable Long appointmentId,
-            @RequestParam("file") MultipartFile file) {
+            @RequestParam(name = "files",  required = false) List<MultipartFile> files,
+            @RequestParam(name = "file",   required = false) MultipartFile       legacyFile) {
+
+        // ── Normalise: accept either "files" (new) or "file" (legacy) ─────────
+        List<MultipartFile> uploads = new ArrayList<>();
+        if (files != null) uploads.addAll(files);
+        if (legacyFile != null && !legacyFile.isEmpty()) uploads.add(legacyFile);
+        if (uploads.isEmpty())
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "At least one file is required (field: 'files' or 'file').");
+        if (uploads.size() > MAX_FILES)
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Maximum " + MAX_FILES + " files per upload. Received: " + uploads.size());
+
+        // ── Validate each file before any S3 write ────────────────────────────
+        for (MultipartFile f : uploads) {
+            String mime = f.getContentType() != null ? f.getContentType() : "application/octet-stream";
+            if (!ALLOWED_TYPES.contains(mime))
+                throw new ResponseStatusException(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                        "File '" + f.getOriginalFilename() + "' has unsupported type: " + mime
+                        + ". Allowed: " + ALLOWED_TYPES);
+            if (f.getSize() > MAX_FILE_BYTES)
+                throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE,
+                        "File '" + f.getOriginalFilename() + "' exceeds the 10 MB limit.");
+        }
 
         SoapNote note = soapNoteRepository.findById(appointmentId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "No SOAP note for appointment " + appointmentId));
-        byte[] bytes;
-        try { bytes = file.getBytes(); }
-        catch (IOException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Failed to read file: " + e.getMessage());
+
+        // ── Upload all files; roll back on first failure via exception ─────────
+        List<String> uploadedKeys = new ArrayList<>();
+        for (int i = 0; i < uploads.size(); i++) {
+            MultipartFile f = uploads.get(i);
+            byte[] bytes;
+            try { bytes = f.getBytes(); }
+            catch (IOException e) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Failed to read file[" + i + "]: " + e.getMessage());
+            }
+            String fileName = (f.getOriginalFilename() != null && !f.getOriginalFilename().isBlank())
+                    ? f.getOriginalFilename()
+                    : "prescription-" + (i + 1) + ".pdf";
+            String key = s3Service.uploadFile(
+                    "prescriptions/" + appointmentId,
+                    fileName,
+                    bytes,
+                    f.getContentType() != null ? f.getContentType() : "application/pdf");
+            uploadedKeys.add(key);
         }
 
-        String key = s3Service.uploadFile(
-                "prescriptions/" + appointmentId,
-                file.getOriginalFilename() != null ? file.getOriginalFilename() : "prescription.pdf",
-                bytes,
-                file.getContentType() != null ? file.getContentType() : "application/pdf");
-
-        note.setPrescriptionS3Key(key);
+        // ── Persist: primary key (index 0) + full array ───────────────────────
+        note.setPrescriptionS3Key(uploadedKeys.get(0));
+        note.setPrescriptionS3Keys(uploadedKeys);
         soapNoteRepository.save(note);
 
         jdbc.update("""
+            INSERT INTO prescription_audit_log (soap_note_id, actor_id, action, metadata, created_at)
+            VALUES (?, NULL, 'UPLOADED', ?::jsonb, NOW())
+            """,
+            note.getId(),
+            "{\"fileCount\":" + uploadedKeys.size() + "}");
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("primaryKey", uploadedKeys.get(0));
+        body.put("s3Keys",     uploadedKeys);
+        body.put("fileCount",  uploadedKeys.size());
+        return ResponseEntity.status(HttpStatus.CREATED).body(body);
+    }
+
+    // -------------------------------------------------------------------------
+    // List presigned URLs for all files on a prescription (multi-file support)
+    // -------------------------------------------------------------------------
+
+    @GetMapping("/api/v1/appointments/{appointmentId}/prescription/files")
+    @PreAuthorize("hasAnyRole('DOCTOR','SPONSOR','PHARMACIST')")
+    public ResponseEntity<Map<String, Object>> listPrescriptionFiles(@PathVariable Long appointmentId) {
+        SoapNote note = soapNoteRepository.findById(appointmentId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "No SOAP note for appointment " + appointmentId));
+
+        List<String> keys = note.getPrescriptionS3Keys();
+        if (keys == null || keys.isEmpty()) {
+            // Fall back to single-key for pre-V14 rows
+            String singleKey = note.getPrescriptionS3Key();
+            if (singleKey == null || singleKey.isBlank())
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No prescription files uploaded yet.");
+            keys = List.of(singleKey);
+        }
+
+        List<Map<String, String>> files = new ArrayList<>();
+        for (int i = 0; i < keys.size(); i++) {
+            Map<String, String> entry = new LinkedHashMap<>();
+            entry.put("index", String.valueOf(i));
+            entry.put("s3Key", keys.get(i));
+            entry.put("url",   s3Service.generatePresignedUrl(keys.get(i)));
+            files.add(entry);
+        }
+
+        jdbc.update("""
             INSERT INTO prescription_audit_log (soap_note_id, actor_id, action, created_at)
-            VALUES (?, NULL, 'UPLOADED', NOW())
+            VALUES (?, NULL, 'VIEWED', NOW())
             """, note.getId());
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("s3Key", key));
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("fileCount", files.size());
+        body.put("files",     files);
+        return ResponseEntity.ok(body);
     }
 
     // -------------------------------------------------------------------------

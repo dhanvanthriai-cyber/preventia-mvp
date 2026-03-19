@@ -15,6 +15,7 @@ public record AdminDashboardResponse(
         int patients,
         int doctors,
         int pharmacists,
+        int sponsors,
         int admins,
         int liveConsultations,
         int scheduledToday,

@@ -6,34 +6,56 @@ const Sans = Platform.select({
   default: 'sans-serif',
 });
 
+// ─── Preventia Design Tokens — Skylight Theme ────────────────────────────────
+//
+// Canonical source for React Native colour, spacing, radius, and shadow tokens.
+// Parallel to web-app/src/app/globals.css @theme block — keep both in sync.
+//
+// Skylight additions (2026-03-19):
+//   sage     updated to #8A9A5B  (warmer yellow-green vs prior #879C83)
+//   cream    confirmed #F9F8F6
+//   charcoal confirmed #2D2D2D  (replaces plain `black` alias)
+//   Shadows.soft updated to match web token (0 10px 40px -10px rgba(0,0,0,0.05))
+// ─────────────────────────────────────────────────────────────────────────────
+
 export const Colors = {
-  cream: '#F9F8F6',
-  surface: '#FFFCF8',
+  // ── Skylight core ──────────────────────────────────────────────────────────
+  cream:    '#F9F8F6',   // bg-cream   — primary background
+  charcoal: '#2D2D2D',   // text-charcoal — primary text
+  sage:     '#8A9A5B',   // bg-sage    — primary accent (updated from #879C83)
+
+  // ── Surface scale ──────────────────────────────────────────────────────────
+  surface:    '#FFFCF8',
   surfaceAlt: '#F3EFE8',
   surfaceTint: '#EAF0E8',
-  text: '#2D2D2D',
+
+  // ── Typography ─────────────────────────────────────────────────────────────
+  text:      '#2D2D2D',
   textMuted: '#6F6A63',
-  sage: '#879C83',
+
+  // ── Accent palette ─────────────────────────────────────────────────────────
   sageDeep: '#6F866C',
   sageTint: '#E7EEE3',
-  gold: '#B89A5F',
+  gold:     '#B89A5F',
   goldTint: '#F5EEE2',
-  rose: '#C78375',
+  rose:     '#C78375',
   roseTint: '#FBEEEA',
-  success: '#7E9A77',
-  border: '#E7E0D6',
-  borderStrong: '#DAD1C5',
-  white: '#FFFFFF',
+  success:  '#7E9A77',
 
-  // Compatibility aliases for legacy screens.
-  trustBlue: '#879C83',
-  black: '#2D2D2D',
-  background: '#F9F8F6',
-  primary: '#879C83',
+  // ── Borders ────────────────────────────────────────────────────────────────
+  border:       '#E7E0D6',
+  borderStrong: '#DAD1C5',
+  white:        '#FFFFFF',
+
+  // ── Compatibility aliases (legacy screens — do not use in new code) ─────────
+  trustBlue:  '#8A9A5B',  // updated to new sage
+  black:      '#2D2D2D',  // use charcoal instead
+  background: '#F9F8F6',  // use cream instead
+  primary:    '#8A9A5B',  // updated to new sage
   primaryText: '#FFFFFF',
   alertYellow: '#B89A5F',
-  alertRed: '#C78375',
-  alertGreen: '#7E9A77',
+  alertRed:    '#C78375',
+  alertGreen:  '#7E9A77',
 } as const;
 
 export const Typography = {
@@ -105,12 +127,16 @@ export const Typography = {
 } as const;
 
 export const Radii = {
-  sm: 16,
-  md: 20,
-  lg: 24,
-  xl: 32,
+  sm:   16,
+  md:   20,
+  lg:   24,   // standard card radius
+  xl:   32,
+  xxl:  48,   // mobile equivalent of web rounded-3xl (1.5rem = 24px → scaled up for native)
   pill: 999,
 } as const;
+
+/** Semantic alias: rounded-3xl equivalent for React Native (1.5rem → 24pt). */
+export const radius3xl = Radii.lg;
 
 export const Spacing = {
   xs: 6,
@@ -147,11 +173,16 @@ export const Shadows = {
     shadowRadius: 24,
     elevation: 3,
   },
+  /**
+   * soft — mirrors web token: 0 10px 40px -10px rgba(0,0,0,0.05)
+   * React Native doesn't support negative spread or rgba on shadowColor,
+   * so we approximate: low opacity, wide radius, slight Y offset.
+   */
   soft: {
-    shadowColor: '#2D2D2D',
-    shadowOffset: { width: 0, height: 8 },
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.05,
-    shadowRadius: 18,
+    shadowRadius: 20,   // approximates 40px blur / 2 (RN uses blur radius, not std deviation)
     elevation: 2,
   },
 } as const;

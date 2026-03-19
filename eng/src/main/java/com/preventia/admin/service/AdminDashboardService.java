@@ -218,6 +218,7 @@ public class AdminDashboardService {
                 patients,
                 doctors,
                 pharmacists,
+                sponsors,
                 admins,
                 liveConsultations,
                 scheduledToday,

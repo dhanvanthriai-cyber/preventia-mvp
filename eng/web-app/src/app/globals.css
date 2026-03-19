@@ -1,5 +1,32 @@
 @import "tailwindcss";
 
+/* ─── Preventia Design Tokens — Skylight Theme ───────────────────────────────
+ *
+ * Tailwind CSS v4 uses @theme for utility generation — no tailwind.config.js.
+ *
+ * Token map:
+ *   --color-sage      → bg-sage / text-sage / border-sage
+ *   --color-cream     → bg-cream / text-cream
+ *   --color-charcoal  → bg-charcoal / text-charcoal
+ *   --radius-3xl      → rounded-3xl
+ *   --shadow-soft     → shadow-soft
+ *
+ * Existing --app-* CSS vars are retained for designSystem.ts (inline-style layer).
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+@theme {
+  /* Colors */
+  --color-sage:     #8A9A5B;
+  --color-cream:    #F9F8F6;
+  --color-charcoal: #2D2D2D;
+
+  /* Border radius */
+  --radius-3xl: 1.5rem; /* 24px */
+
+  /* Box shadows */
+  --shadow-soft: 0 10px 40px -10px rgba(0, 0, 0, 0.05);
+}
+
 :root {
   --app-bg: #f9f8f6;
   --app-surface: #fffcf8;

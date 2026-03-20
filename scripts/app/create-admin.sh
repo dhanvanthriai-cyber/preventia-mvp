@@ -3,7 +3,7 @@
 # Safe to run multiple times (uses INSERT ... ON CONFLICT DO UPDATE).
 #
 # Usage:
-#   cd /Users/satishjonnala/Documents/Dhanvantri/dhanvanthri-mvp/eng
+#   cd /Users/satishjonnala/Documents/Dhanvantri/preventia-mvp/eng
 #   bash create-admin.sh
 
 set -euo pipefail

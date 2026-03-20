@@ -1,4 +1,4 @@
-# Dhanvanthri MVP — TODO Tracker
+# Preventia MVP — TODO Tracker
 
 ## Sprint: UI Refactor + Merge Resolution
 
@@ -11,7 +11,7 @@
 - [ ] `refactor(ui)` — sub-agent executing directory scaffold + shared extraction + Next.js web-app stub
 
 ### ⏳ Pending (this session)
-- [ ] Update imports in `mobile-app/` screens → `@dhanvanthri/shared`
+- [ ] Update imports in `mobile-app/` screens → `@preventia/shared`
 - [ ] Port DoctorDashboard + PharmacistQueue to `web-app/` (HTML, no RN)
 - [ ] Verify `eng/shared/src/types/index.ts` mirrors backend AppointmentStatus enum
 

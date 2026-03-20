@@ -468,7 +468,7 @@ clearToken(): void
 
 **Server components** (e.g. `/doctor/page.tsx`) read the cookie via Next.js `cookies()`:
 ```typescript
-const token = cookies().get('dhanvanthri_token')?.value;
+const token = cookies().get('preventia_token')?.value;
 ```
 
 ---
@@ -669,7 +669,7 @@ curl -X POST http://localhost:8080/api/v1/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "name":     "Test Doctor",
-    "email":    "doctor@dhanvanthri.local",
+    "email":    "doctor@preventia.local",
     "password": "Test@1234",
     "role":     "DOCTOR"
   }'
@@ -681,7 +681,7 @@ curl -X POST http://localhost:8080/api/v1/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "name":     "Test Patient",
-    "email":    "patient@dhanvanthri.local",
+    "email":    "patient@preventia.local",
     "password": "Test@1234",
     "role":     "RECIPIENT"
   }'
@@ -692,7 +692,7 @@ curl -X POST http://localhost:8080/api/v1/auth/register \
 curl -X POST http://localhost:8080/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{
-    "email":    "doctor@dhanvanthri.local",
+    "email":    "doctor@preventia.local",
     "password": "Test@1234"
   }'
 ```
@@ -718,8 +718,8 @@ to create accounts. Recommended test accounts:
 
 | Role | Email | Password |
 |---|---|---|
-| Doctor | `doctor@dhanvanthri.local` | `Test@1234` |
-| Pharmacist | `pharmacist@dhanvanthri.local` | `Test@1234` |
-| Sponsor | `sponsor@dhanvanthri.local` | `Test@1234` |
-| Patient | `patient@dhanvanthri.local` | `Test@1234` |
+| Doctor | `doctor@preventia.local` | `Test@1234` |
+| Pharmacist | `pharmacist@preventia.local` | `Test@1234` |
+| Sponsor | `sponsor@preventia.local` | `Test@1234` |
+| Patient | `patient@preventia.local` | `Test@1234` |
 

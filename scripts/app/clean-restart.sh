@@ -3,7 +3,7 @@
 # Safe to run any time — idempotent.
 #
 # Usage:
-#   cd /Users/satishjonnala/Documents/Dhanvantri/dhanvanthri-mvp/eng
+#   cd /Users/satishjonnala/Documents/Dhanvantri/preventia-mvp/eng
 #   bash clean-restart.sh
 
 set -euo pipefail
@@ -34,13 +34,13 @@ echo ""
 # ── Step 3: Fix ALL Flyway checksums + ensure preventia_db ─
 echo "▶ Step 3/4: Fixing database state..."
 
-# Rename DB if still called dhanvanthri_db
+# Rename DB if still called preventia_db
 podman exec preventia-postgres psql -U dhan_dev -d postgres -c "
 DO \$\$ BEGIN
-  IF EXISTS (SELECT 1 FROM pg_database WHERE datname='dhanvanthri_db') AND
+  IF EXISTS (SELECT 1 FROM pg_database WHERE datname='preventia_db') AND
      NOT EXISTS (SELECT 1 FROM pg_database WHERE datname='preventia_db') THEN
-    ALTER DATABASE dhanvanthri_db RENAME TO preventia_db;
-    RAISE NOTICE 'Renamed dhanvanthri_db -> preventia_db';
+    ALTER DATABASE preventia_db RENAME TO preventia_db;
+    RAISE NOTICE 'Renamed preventia_db -> preventia_db';
   END IF;
 END \$\$;" 2>&1 | grep -v "^$" || true
 
@@ -60,7 +60,7 @@ SELECT 'Flyway checksums OK' AS status;" 2>&1 | grep -v "^$"
 HASH='$2b$10$wG8mun1I0nZUBI.R9OwNA.MQzkiyIEoJTQ5tlmhWXcJF0H0OuNW2a'
 podman exec preventia-postgres psql -U dhan_dev -d preventia_db -c "
 INSERT INTO users (name, email, password, role)
-VALUES ('Platform Admin', 'admin@dhanvanthri.local', '${HASH}', 'ADMIN')
+VALUES ('Platform Admin', 'admin@preventia.local', '${HASH}', 'ADMIN')
 ON CONFLICT (email) DO UPDATE SET role='ADMIN', password=EXCLUDED.password;
 SELECT 'Admin user OK' AS status;" 2>&1 | grep -v "^$"
 

@@ -37,7 +37,7 @@ From the repo root:
 
 ```bash
 git clone <repo-url>
-cd dhanvanthri-mvp
+cd preventia-mvp
 ```
 
 Install and build the shared package first:

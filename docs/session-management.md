@@ -116,7 +116,7 @@ curl -X POST http://localhost:8080/api/v1/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Test Doctor",
-    "email": "doctor@dhanvanthri.local",
+    "email": "doctor@preventia.local",
     "password": "Test@1234",
     "role": "DOCTOR"
   }'
@@ -148,7 +148,7 @@ curl -X POST http://localhost:8080/api/v1/auth/register \
 ## How JWT_SECRET flows through the app
 ```
 .env
- └── JWT_SECRET=dhanvanthri-local-dev-secret-2026
+ └── JWT_SECRET=preventia-local-dev-secret-2026
        │
        ▼
 docker-compose.yml

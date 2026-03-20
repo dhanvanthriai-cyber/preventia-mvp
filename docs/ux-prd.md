@@ -1,4 +1,4 @@
-# UX-PRD: Unified Persona Architecture (Dhanvanthri MVP)
+# UX-PRD: Unified Persona Architecture (Preventia MVP)
 
 ## 1. Core Philosophy
 The platform must support three distinct personas (Patient, Doctor, Pharmacist) across two technical platforms (Web and Mobile). Access is gated by Persona ID, not by device.

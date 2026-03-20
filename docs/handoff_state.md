@@ -1,6 +1,6 @@
-# Project Dhanvanthri — Session Handoff State
+# Project Preventia — Session Handoff State
 **Date:** Fri 2026-03-13 01:17 UTC
-**Repo:** `git@github-dhanvanthri:dhanvanthriai-cyber/dhanvanthri-mvp.git`
+**Repo:** `git@github-dhanvanthri:dhanvanthriai-cyber/preventia-mvp.git`
 **Branch:** `main` (single branch — `master` deleted this session)
 **HEAD:** `0a74121`
 
@@ -54,7 +54,7 @@ POST /api/v1/appointments
 | `DAILY_WEBHOOK_SECRET` | dashboard.daily.co → Developers → Webhooks |
 | `AWS_ACCESS_KEY_ID` | AWS IAM console |
 | `AWS_SECRET_ACCESS_KEY` | AWS IAM console |
-| `AWS_S3_BUCKET_NAME` | default: `dhanvanthri-prescriptions-dev` |
+| `AWS_S3_BUCKET_NAME` | default: `preventia-prescriptions-dev` |
 
 **Webhook URL:** Not yet registered in Daily.co dashboard.
 → Human action required: set to `https://<VM_PUBLIC_IP>:8080/webhooks/daily`
@@ -178,10 +178,10 @@ prevents drift between platforms.
 |------|--------|
 | Oracle VM (Ubuntu, arm64) | ✅ Running |
 | Docker socket | ✅ Accessible via `sg docker -c "..."` prefix |
-| PostgreSQL 16 (Docker) | ✅ Running — `dhanvanthri-postgres` container |
+| PostgreSQL 16 (Docker) | ✅ Running — `preventia-postgres` container |
 | Maven (`./mvnw`) | ❌ Not installed — use `psql` direct for migrations |
 | Spring Boot app | ❌ Not running (only DB is up) |
-| SSH key | `~/.ssh/id_ed25519_dhanvanthri` → `github-dhanvanthri` host alias |
+| SSH key | `~/.ssh/id_ed25519_preventia` → `github-preventia` host alias |
 
 ---
 

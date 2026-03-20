@@ -7,7 +7,7 @@ It is intentionally split into:
 - deployment/control plane: how code and secrets are pushed into AWS
 
 If you want a cleaner system-context/container version, see:
-- [REFERENCE_ARCHITECTURE_C4.md](/Users/satishjonnala/Documents/Dhanvantri/dhanvanthri-mvp/ops/aws/REFERENCE_ARCHITECTURE_C4.md)
+- [REFERENCE_ARCHITECTURE_C4.md](/Users/satishjonnala/Documents/Dhanvantri/preventia-mvp/ops/aws/REFERENCE_ARCHITECTURE_C4.md)
 
 ## Runtime Architecture
 

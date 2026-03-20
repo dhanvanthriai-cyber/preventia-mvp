@@ -4,9 +4,9 @@
 
 The current deployed topology is documented in:
 
-- [REFERENCE_ARCHITECTURE.md](/Users/satishjonnala/Documents/Dhanvantri/dhanvanthri-mvp/ops/aws/REFERENCE_ARCHITECTURE.md)
-- [REFERENCE_ARCHITECTURE_C4.md](/Users/satishjonnala/Documents/Dhanvantri/dhanvanthri-mvp/ops/aws/REFERENCE_ARCHITECTURE_C4.md)
-- [preventia-aws-reference-architecture.svg](/Users/satishjonnala/Documents/Dhanvantri/dhanvanthri-mvp/ops/aws/assets/preventia-aws-reference-architecture.svg)
+- [REFERENCE_ARCHITECTURE.md](/Users/satishjonnala/Documents/Dhanvantri/preventia-mvp/ops/aws/REFERENCE_ARCHITECTURE.md)
+- [REFERENCE_ARCHITECTURE_C4.md](/Users/satishjonnala/Documents/Dhanvantri/preventia-mvp/ops/aws/REFERENCE_ARCHITECTURE_C4.md)
+- [preventia-aws-reference-architecture.svg](/Users/satishjonnala/Documents/Dhanvantri/preventia-mvp/ops/aws/assets/preventia-aws-reference-architecture.svg)
 
 High level:
 

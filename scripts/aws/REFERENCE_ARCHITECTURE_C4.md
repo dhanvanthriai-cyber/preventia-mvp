@@ -2,7 +2,7 @@
 
 This is a cleaner, C4-style reference for the current Preventia AWS setup.
 
-Use it alongside [REFERENCE_ARCHITECTURE.md](/Users/satishjonnala/Documents/Dhanvantri/dhanvanthri-mvp/ops/aws/REFERENCE_ARCHITECTURE.md):
+Use it alongside [REFERENCE_ARCHITECTURE.md](/Users/satishjonnala/Documents/Dhanvantri/preventia-mvp/ops/aws/REFERENCE_ARCHITECTURE.md):
 - `REFERENCE_ARCHITECTURE.md` = operational/runtime wiring
 - `REFERENCE_ARCHITECTURE_C4.md` = cleaner system-context and container views
 

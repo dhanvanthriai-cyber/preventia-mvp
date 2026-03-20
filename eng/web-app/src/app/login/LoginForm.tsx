@@ -148,7 +148,7 @@ export default function LoginForm() {
 
       clearToken();
       // Clear any stale cookies from previous project naming.
-      document.cookie = 'dhanvanthri_token=; path=/; max-age=0; SameSite=Lax';
+      document.cookie = 'preventia_token=; path=/; max-age=0; SameSite=Lax';
 
       setTokenCookie(data.accessToken, data.expiresInSeconds ?? 86400);
 

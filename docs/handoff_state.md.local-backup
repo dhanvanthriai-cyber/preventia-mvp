@@ -1,4 +1,4 @@
-💾 DHANVANTHRI MVP: STATE-FILE (v1.1)
+💾 PREVENTIA MVP: STATE-FILE (v1.1)
 Project Context: Healthcare MVP for NRI-to-Parent care.
 Architecture: Java 21 / Spring Boot 3.2 / PostgreSQL 16 / Docker / AWS S3.
 Environment: Oracle VM (6GB RAM) + Local Mac (Sync via GitHub).
@@ -8,16 +8,16 @@ Environment: Oracle VM (6GB RAM) + Local Mac (Sync via GitHub).
 
 [x] Auth Layer: JWT + RBAC (Sponsor, Recipient, Doctor, Pharmacist) complete.
 
-[x] S3 Storage: Bucket created in ap-south-1. IAM user dhanvanthri-app verified via CLI.
+[x] S3 Storage: Bucket created in ap-south-1. IAM user preventia-app verified via CLI.
 
 [x] Git/Sync: SSH Identity Routing configured for dhanvanthriai-cyber account.
 
 🛠 Active Configuration
-GitHub Alias: github-dhanvanthri
+GitHub Alias: github-preventia
 
-S3 Bucket: dhanvanthri-mvp-prescriptions
+S3 Bucket: preventia-mvp-prescriptions
 
-Database: dhanvanthri_db (user: dhan_dev)
+Database: preventia_db (user: preventia_dev)
 
 Aesthetic: Neo-Brutalist Wellness (2px black borders, monospace data).
 

@@ -11,7 +11,7 @@
 - **Token Alert:** ✅ Well within limits — no handoff needed yet
 
 ### Task 1 — Git Merge (COMPLETE ✅)
-- Repo: `/home/ubuntu/healthcare-mvp` (origin: `github-dhanvanthri:dhanvanthriai-cyber/dhanvanthri-mvp.git`)
+- Repo: `/home/ubuntu/healthcare-mvp` (origin: `github-dhanvanthri:dhanvanthriai-cyber/preventia-mvp.git`)
 - Pre-pull HEAD: `0069ad3`
 - Post-pull HEAD: `f07fd4b`
 - **Result: Clean fast-forward. Zero merge conflicts.**

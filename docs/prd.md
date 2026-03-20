@@ -1,6 +1,6 @@
-Project Dhanvanthri MVP
+Project Preventia MVP
 1. Executive Summary
-   Dhanvanthri is a high-trust healthcare platform bridging the gap between Non-Resident Indian (NRI) children (Sponsors) and their parents in India (Recipients). The MVP focuses on a "Tri-Party Validation" model involving Patients, Doctors, and Pharmacies to manage chronic care through a high-utility interface.
+   Preventia is a high-trust healthcare platform bridging the gap between Non-Resident Indian (NRI) children (Sponsors) and their parents in India (Recipients). The MVP focuses on a "Tri-Party Validation" model involving Patients, Doctors, and Pharmacies to manage chronic care through a high-utility interface.
 2. Design & UX Strategy (The Brutalist Mandate)
       The UI must strictly adhere to Brutalist principles for maximum scannability by elderly users.
 

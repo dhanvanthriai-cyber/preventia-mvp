@@ -13,7 +13,7 @@ you add real keys.
 
 ### Step 1 — Start the backend
 ```bash
-cd /Users/satishjonnala/Documents/Dhanvantri/dhanvanthri-mvp/eng
+cd /Users/satishjonnala/Documents/Dhanvantri/preventia-mvp/eng
 zsh restart.sh
 ```
 
@@ -61,7 +61,7 @@ You should see the stub placeholder card:
 ### Step 1 — Get your Stream API keys
 1. Go to [https://dashboard.getstream.io](https://dashboard.getstream.io)
 2. Create a free account (or log in)
-3. Create an app → choose **Chat** → name it `dhanvanthri-mvp`
+3. Create an app → choose **Chat** → name it `preventia-mvp`
 4. From the app Overview page, copy:
     - **API Key** (always visible)
     - **API Secret** (click "Show Secret")
@@ -69,15 +69,15 @@ You should see the stub placeholder card:
 ### Step 2 — Add keys to your .env
 ```bash
 # Add these two lines to eng/.env
-echo 'STREAM_API_KEY=your_api_key_here' >> /Users/satishjonnala/Documents/Dhanvantri/dhanvanthri-mvp/eng/.env
-echo 'STREAM_API_SECRET=your_api_secret_here' >> /Users/satishjonnala/Documents/Dhanvantri/dhanvanthri-mvp/eng/.env
+echo 'STREAM_API_KEY=your_api_key_here' >> /Users/satishjonnala/Documents/Dhanvantri/preventia-mvp/eng/.env
+echo 'STREAM_API_SECRET=your_api_secret_here' >> /Users/satishjonnala/Documents/Dhanvantri/preventia-mvp/eng/.env
 ```
 Also add `STREAM_API_KEY` and `STREAM_API_SECRET` to `docker-compose.yml` env block
 (they're currently missing from it).
 
 ### Step 3 — Restart the backend
 ```bash
-cd /Users/satishjonnala/Documents/Dhanvantri/dhanvanthri-mvp/eng
+cd /Users/satishjonnala/Documents/Dhanvantri/preventia-mvp/eng
 zsh restart.sh
 ```
 

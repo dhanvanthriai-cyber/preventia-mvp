@@ -2,6 +2,7 @@ package com.preventia.shared.security;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
@@ -25,15 +26,17 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         this.jwtProvider = jwtProvider;
     }
 
+    private static final String COOKIE_NAME = "preventia_token";
+
     @Override
     protected void doFilterInternal(HttpServletRequest req,
                                     HttpServletResponse res,
                                     FilterChain chain)
         throws ServletException, IOException {
 
-        String header = req.getHeader("Authorization");
-        if (header != null && header.startsWith("Bearer ")) {
-            String token = header.substring(7);
+        String token = extractToken(req);
+
+        if (token != null) {
             boolean valid = jwtProvider.validateToken(token);
             log.debug("[JwtAuthFilter] {} {} token_len={} valid={}",
                 req.getMethod(), req.getRequestURI(), token.length(), valid);
@@ -51,8 +54,38 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                     req.getMethod(), req.getRequestURI(), token.length());
             }
         } else {
-            log.debug("[JwtAuthFilter] {} {} — no Bearer header", req.getMethod(), req.getRequestURI());
+            log.debug("[JwtAuthFilter] {} {} — no token (header or cookie)", req.getMethod(), req.getRequestURI());
         }
         chain.doFilter(req, res);
+    }
+
+    /**
+     * Extract the JWT from the request.
+     *
+     * Resolution order:
+     *  1. Authorization: Bearer <token>  — standard API / mobile clients
+     *  2. preventia_token cookie          — web-app fallback for server-side proxy hops
+     *     where the Authorization header may not have been forwarded.
+     *
+     * Returns null if no token is present in either location.
+     */
+    private String extractToken(HttpServletRequest req) {
+        // 1. Authorization header (preferred)
+        String header = req.getHeader("Authorization");
+        if (header != null && header.startsWith("Bearer ")) {
+            return header.substring(7);
+        }
+
+        // 2. Cookie fallback
+        if (req.getCookies() != null) {
+            for (Cookie cookie : req.getCookies()) {
+                if (COOKIE_NAME.equals(cookie.getName())) {
+                    String value = cookie.getValue();
+                    return (value != null && !value.isBlank()) ? value : null;
+                }
+            }
+        }
+
+        return null;
     }
 }

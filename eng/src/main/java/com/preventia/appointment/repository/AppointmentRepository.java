@@ -45,4 +45,21 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
 
     /** All appointments for a recipient regardless of status. */
     List<Appointment> findByRecipientId(Long recipientId);
+
+    /**
+     * Most recent appointment for a patient (for chat peer resolution).
+     * Spring Data derives: ORDER BY start_time DESC LIMIT 1
+     */
+    Optional<Appointment> findTopByRecipientIdOrderByStartTimeDesc(Long recipientId);
+
+    /**
+     * All appointments in a given lifecycle state (used by ZombieRoomScheduler).
+     */
+    List<Appointment> findByStatus(AppointmentStatus status);
+
+    /**
+     * All ACTIVE appointments whose end_time is before the given cutoff.
+     * Used by ZombieRoomScheduler to detect stale rooms.
+     */
+    List<Appointment> findByStatusAndEndTimeBefore(AppointmentStatus status, java.time.OffsetDateTime cutoff);
 }

@@ -24,6 +24,22 @@ spring:
     repair-on-migrate: true        # Auto-repair checksum mismatches on startup
     validate-on-migrate: false     # Skip validation — checksums are managed via repair
 
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+        connectiontimeout: 5000
+        timeout: 5000
+        writetimeout: 5000
+
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -36,6 +52,12 @@ server:
     context-path: /
 
 app:
+  mail:
+    admin-address: ${ADMIN_EMAIL:admin@preventia.ai}
+    from-address: ${MAIL_FROM:noreply@preventia.ai}
+    enabled: ${MAIL_ENABLED:false}
+  firebase:
+    enabled: ${FIREBASE_ENABLED:false}
   jwt:
     secret: ${JWT_SECRET}          # Injected from AWS Secrets Manager (ap-south-1)
     expiration-ms: 86400000        # 24 hours
@@ -83,6 +105,7 @@ razorpay:
 stream:
   api-key: ${STREAM_API_KEY:STUB_KEY}
   api-secret: ${STREAM_API_SECRET:STUB_SECRET}
+  webhook-secret: ${STREAM_WEBHOOK_SECRET:STUB_SECRET}
 
 daily:
   api-key: ${DAILY_API_KEY}                   # Daily.co REST API key — never log or expose

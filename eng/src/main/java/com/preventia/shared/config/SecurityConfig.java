@@ -93,6 +93,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/webhook/stripe").permitAll()
                 .requestMatchers("/api/v1/webhook/razorpay").permitAll()
                 .requestMatchers("/webhooks/razorpay").permitAll()
+                .requestMatchers("/api/v1/webhooks/stream").permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)

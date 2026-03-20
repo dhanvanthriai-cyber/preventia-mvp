@@ -1,5 +1,7 @@
 package com.preventia.chat.controller;
 
+import com.preventia.appointment.domain.Appointment;
+import com.preventia.appointment.repository.AppointmentRepository;
 import com.preventia.auth.repository.UserRepository;
 import com.preventia.chat.dto.ChatTokenResponse;
 import com.preventia.chat.service.StreamChatService;
@@ -9,6 +11,11 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * ChatController — issues Stream Chat user tokens.
@@ -25,13 +32,16 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/chat")
 public class ChatController {
 
-    private final StreamChatService streamChatService;
-    private final UserRepository    userRepository;
+    private final StreamChatService     streamChatService;
+    private final UserRepository        userRepository;
+    private final AppointmentRepository appointmentRepository;
 
     public ChatController(StreamChatService streamChatService,
-                          UserRepository userRepository) {
-        this.streamChatService = streamChatService;
-        this.userRepository    = userRepository;
+                          UserRepository userRepository,
+                          AppointmentRepository appointmentRepository) {
+        this.streamChatService     = streamChatService;
+        this.userRepository        = userRepository;
+        this.appointmentRepository = appointmentRepository;
     }
 
     /**
@@ -64,5 +74,42 @@ public class ChatController {
         );
 
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * GET /api/v1/chat/peer
+     *
+     * Resolves the Stream Chat peer(s) for the currently authenticated user:
+     * - RECIPIENT → their doctor from the most recent appointment
+     *   Response: { "peerUserId": "42", "peerName": "Dr. Smith" }
+     * - DOCTOR → all their patients
+     *   Response: { "peerUserIds": ["12", "34"] }
+     */
+    @GetMapping("/peer")
+    public ResponseEntity<Map<String, Object>> getChatPeer(Authentication authentication) {
+        String email = authentication.getName();
+        User user = userRepository.findByEmail(email)
+            .orElseThrow(() -> new IllegalStateException("Authenticated user not found: " + email));
+
+        Map<String, Object> result = new HashMap<>();
+
+        if (user.getRole() == User.Role.RECIPIENT) {
+            appointmentRepository.findTopByRecipientIdOrderByStartTimeDesc(user.getId())
+                .ifPresent(appt -> {
+                    result.put("peerUserId", appt.getDoctorId().toString());
+                    // Resolve doctor name from users table
+                    userRepository.findById(appt.getDoctorId())
+                        .ifPresent(doc -> result.put("peerName", "Dr. " + doc.getName()));
+                });
+        } else if (user.getRole() == User.Role.DOCTOR) {
+            List<Appointment> appts = appointmentRepository.findByDoctorId(user.getId());
+            List<String> peerIds = appts.stream()
+                .map(a -> a.getRecipientId().toString())
+                .distinct()
+                .collect(Collectors.toList());
+            result.put("peerUserIds", peerIds);
+        }
+
+        return ResponseEntity.ok(result);
     }
 }

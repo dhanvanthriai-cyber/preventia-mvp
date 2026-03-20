@@ -7,6 +7,7 @@ import com.preventia.appointment.dto.CreateAppointmentRequest;
 import com.preventia.appointment.dto.DailyRoomProvisionResult;
 import com.preventia.appointment.repository.AppointmentRepository;
 import com.preventia.auth.repository.UserRepository;
+import com.preventia.chat.service.ChatNotificationService;
 import com.preventia.family.domain.User;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.stereotype.Service;
@@ -29,16 +30,19 @@ import java.util.stream.Collectors;
 @Transactional
 public class AppointmentService {
 
-    private final AppointmentRepository appointmentRepository;
-    private final DailyRoomService      dailyRoomService;
-    private final UserRepository        userRepository;
+    private final AppointmentRepository  appointmentRepository;
+    private final DailyRoomService       dailyRoomService;
+    private final UserRepository         userRepository;
+    private final ChatNotificationService chatNotificationService;
 
     public AppointmentService(AppointmentRepository appointmentRepository,
                               DailyRoomService dailyRoomService,
-                              UserRepository userRepository) {
-        this.appointmentRepository = appointmentRepository;
-        this.dailyRoomService      = dailyRoomService;
-        this.userRepository        = userRepository;
+                              UserRepository userRepository,
+                              ChatNotificationService chatNotificationService) {
+        this.appointmentRepository    = appointmentRepository;
+        this.dailyRoomService         = dailyRoomService;
+        this.userRepository           = userRepository;
+        this.chatNotificationService  = chatNotificationService;
     }
 
     // -------------------------------------------------------------------------
@@ -113,6 +117,15 @@ public class AppointmentService {
         saved.setDailyRoomUrl(room.roomUrl());
         saved.setDailyRoomName(room.roomName());
         // @Transactional dirty-check will flush the update automatically
+
+        // Step 4: Send appointment confirmation via Stream Chat (best-effort)
+        chatNotificationService.sendAppointmentConfirmation(
+            request.doctorId(),
+            request.recipientId(),
+            saved.getId(),
+            request.doctorName(),
+            request.startTime()
+        );
 
         return toResponse(saved, room);
     }

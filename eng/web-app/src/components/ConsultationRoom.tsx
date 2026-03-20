@@ -7,15 +7,22 @@
  *
  * The frameRef div is passed to the hook; the iframe is injected there
  * automatically when JOIN CALL is clicked.
+ *
+ * Chat overlay (VIDEO-001): a 💬 CHAT toggle button appears in the controls bar
+ * when the room is ACTIVE, rendering ChatPanel below the video frame.
  */
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useConsultationRoom } from '../hooks/useConsultationRoom';
+
+const ChatPanel = dynamic(() => import('./ChatPanel'), { ssr: false });
 
 interface Props {
   appointmentId: number;
   roomUrl:       string;
   doctorToken:   string;   // may be recipientToken on the patient side
   patientName:   string;
+  peerUserId?:   string;   // Stream userId of the peer (doctor or patient)
   onLocked:      () => void;
 }
 
@@ -24,6 +31,7 @@ export default function ConsultationRoom({
   roomUrl,
   doctorToken,
   patientName,
+  peerUserId,
   onLocked,
 }: Props) {
   // The hook attaches the Daily iframe directly to this div
@@ -31,6 +39,9 @@ export default function ConsultationRoom({
 
   const { roomStatus, participantCount, error, join, leave } =
     useConsultationRoom(frameRef, roomUrl, doctorToken, appointmentId);
+
+  // In-call chat overlay toggle (VIDEO-001)
+  const [chatOpen, setChatOpen] = useState(false);
 
   // When LOCKED, fire callback to parent so DoctorDashboard can refresh
   useEffect(() => {
@@ -96,10 +107,26 @@ export default function ConsultationRoom({
             END CALL
           </button>
         )}
+        {roomStatus === 'ACTIVE' && peerUserId && (
+          <button onClick={() => setChatOpen((o) => !o)} style={styles.chatToggleBtn}>
+            💬 {chatOpen ? 'CLOSE CHAT' : 'CHAT'}
+          </button>
+        )}
         {(roomStatus === 'LOCKED' || roomStatus === 'COMPLETED') && (
           <span style={styles.lockedTag}>🔒 SESSION ENDED</span>
         )}
       </div>
+
+      {/* In-call chat overlay (VIDEO-001) */}
+      {chatOpen && roomStatus === 'ACTIVE' && peerUserId && (
+        <div style={styles.chatOverlay}>
+          <ChatPanel
+            userName={patientName}
+            height={300}
+            peerUserId={peerUserId}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -122,4 +149,6 @@ const styles: Record<string, React.CSSProperties> = {
   joinBtn:     { fontFamily: 'monospace', fontSize: 12, fontWeight: 700, backgroundColor: '#000', color: '#fff', border: '2px solid #111', padding: '8px 20px', cursor: 'pointer' },
   leaveBtn:    { fontFamily: 'monospace', fontSize: 12, fontWeight: 700, backgroundColor: '#CC0000', color: '#fff', border: '2px solid #111', padding: '8px 20px', cursor: 'pointer' },
   lockedTag:   { fontFamily: 'monospace', fontSize: 12, fontWeight: 700, color: '#CC0000', border: '2px solid #CC0000', padding: '6px 14px' },
+  chatToggleBtn: { fontFamily: 'monospace', fontSize: 12, fontWeight: 700, backgroundColor: '#1a1a2e', color: '#fff', border: '2px solid #111', padding: '8px 18px', cursor: 'pointer' },
+  chatOverlay: { borderTop: '2px solid #111', backgroundColor: '#F9F9F9' },
 };

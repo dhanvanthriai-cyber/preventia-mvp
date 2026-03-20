@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ConsultationRoom from '@/components/ConsultationRoom';
+import ConsentGate from '@/components/ConsentGate';
 import { getTokenFromCookie } from '@/lib/auth';
 import type { Appointment } from '@preventia/shared';
 
@@ -47,14 +48,17 @@ export default function DoctorConsultPageClient({ appointmentId }: DoctorConsult
   }
 
   return (
-    <div style={{ maxWidth: 900, margin: '32px auto', padding: '0 16px' }}>
-      <ConsultationRoom
-        appointmentId={appointment.id}
-        roomUrl={appointment.dailyRoomUrl}
-        doctorToken={appointment.doctorToken}
-        patientName={appointment.recipientName ?? `Patient #${appointment.id}`}
-        onLocked={handleLocked}
-      />
-    </div>
+    <ConsentGate appointmentId={appointmentId}>
+      <div style={{ maxWidth: 900, margin: '32px auto', padding: '0 16px' }}>
+        <ConsultationRoom
+          appointmentId={appointment.id}
+          roomUrl={appointment.dailyRoomUrl}
+          doctorToken={appointment.doctorToken}
+          patientName={appointment.recipientName ?? `Patient #${appointment.id}`}
+          peerUserId={String(appointment.recipientId)}
+          onLocked={handleLocked}
+        />
+      </div>
+    </ConsentGate>
   );
 }

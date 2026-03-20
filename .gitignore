@@ -39,3 +39,16 @@ TOOLS.md
 MEMORY.md
 memory/
 docs/memory/
+
+# OpenClaw Agent Metadata
+.openclaw/
+**/ .openclaw/
+
+# Agent Workspace Directories
+ops/
+pm/
+
+# OS/IDE junk
+.DS_Store
+.idea/
+.vscode/

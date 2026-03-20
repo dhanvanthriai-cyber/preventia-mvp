@@ -200,13 +200,13 @@ public class AppointmentService {
      * Process an inbound Daily.co webhook event payload.
      *
      * Currently handles:
-     *   - "meeting.ended"   → locks the appointment (primary EMR lock trigger)
-     *   - "meeting.started" → activates the appointment (fallback / belt-and-suspenders)
+     *   - "meeting-ended"   → locks the appointment (primary EMR lock trigger)
+     *   - "meeting-started" → activates the appointment (fallback / belt-and-suspenders)
      *
      * @param payload raw event body forwarded from AppointmentController
      */
     public void handleDailyWebhook(java.util.Map<String, Object> payload) {
-        String eventType = String.valueOf(payload.getOrDefault("event", ""));
+        String eventType = String.valueOf(payload.getOrDefault("action", ""));
 
         @SuppressWarnings("unchecked")
         java.util.Map<String, Object> room =
@@ -217,8 +217,8 @@ public class AppointmentService {
 
         appointmentRepository.findByDailyRoomName(roomName).ifPresent(appt -> {
             switch (eventType) {
-                case "meeting.started" -> appt.setStatus(AppointmentStatus.ACTIVE);
-                case "meeting.ended"   -> appt.setStatus(AppointmentStatus.LOCKED);
+                case "meeting-started" -> appt.setStatus(AppointmentStatus.ACTIVE);
+                case "meeting-ended"   -> appt.setStatus(AppointmentStatus.LOCKED);
                 default                -> { /* unhandled event — ignore */ }
             }
         });

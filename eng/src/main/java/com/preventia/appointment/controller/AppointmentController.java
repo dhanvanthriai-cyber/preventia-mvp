@@ -85,13 +85,13 @@ public class AppointmentController {
     // -------------------------------------------------------------------------
 
     @PutMapping("/api/v1/appointments/{id}/activate")
-    @PreAuthorize("hasRole('DOCTOR')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'RECIPIENT', 'SPONSOR')")
     public ResponseEntity<AppointmentResponse> activateAppointment(@PathVariable Long id) {
         return ResponseEntity.ok(appointmentService.activateAppointment(id));
     }
 
     @PutMapping("/api/v1/appointments/{id}/complete")
-    @PreAuthorize("hasAnyRole('DOCTOR','SPONSOR')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'RECIPIENT', 'SPONSOR')")
     public ResponseEntity<AppointmentResponse> completeAppointment(@PathVariable Long id) {
         return ResponseEntity.ok(appointmentService.completeAppointment(id));
     }

@@ -16,8 +16,11 @@ import type { DailyCall, DailyParticipant, DailyEvent } from '@daily-co/daily-js
 
 interface UseDailySessionOptions {
   roomUrl: string;
-  token: string;
+  /** Daily.co meeting token (room credential). */
+  meetingToken: string;
   appointmentId: number;
+  /** Preventia JWT — sent as Authorization: Bearer on API calls. */
+  authToken?: string;
   /** Base URL for the Preventia Spring Boot API (defaults to env var). */
   apiBaseUrl?: string;
 }
@@ -45,8 +48,9 @@ const DEFAULT_API_BASE =
 
 export function useDailySession({
   roomUrl,
-  token,
+  meetingToken,
   appointmentId,
+  authToken,
   apiBaseUrl = DEFAULT_API_BASE,
 }: UseDailySessionOptions): UseDailySessionReturn {
   const callRef = useRef<DailyCall | null>(null);
@@ -58,9 +62,11 @@ export function useDailySession({
 
   const activateAppointment = useCallback(async () => {
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
       const res = await fetch(
         `${apiBaseUrl}/api/v1/appointments/${appointmentId}/activate`,
-        { method: 'PUT', headers: { 'Content-Type': 'application/json' } },
+        { method: 'PUT', headers },
       );
       if (!res.ok) {
         console.warn(
@@ -70,13 +76,15 @@ export function useDailySession({
     } catch (err) {
       console.error('[useDailySession] activateAppointment error:', err);
     }
-  }, [apiBaseUrl, appointmentId]);
+  }, [apiBaseUrl, appointmentId, authToken]);
 
   const completeAppointment = useCallback(async () => {
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
       const res = await fetch(
         `${apiBaseUrl}/api/v1/appointments/${appointmentId}/complete`,
-        { method: 'PUT', headers: { 'Content-Type': 'application/json' } },
+        { method: 'PUT', headers },
       );
       if (!res.ok) {
         console.warn(
@@ -86,7 +94,7 @@ export function useDailySession({
     } catch (err) {
       console.error('[useDailySession] completeAppointment error:', err);
     }
-  }, [apiBaseUrl, appointmentId]);
+  }, [apiBaseUrl, appointmentId, authToken]);
 
   // ── Participant count from call object ────────────────────────────────────
 
@@ -131,21 +139,8 @@ export function useDailySession({
       // ── Event: participant-left ──────────────────────────────────────────
       callObject.on(
         'participant-left' as DailyEvent,
-        async (_event: unknown) => {
+        (_event: unknown) => {
           refreshParticipantCount();
-
-          // If all remote participants left, auto-complete the appointment
-          if (callRef.current) {
-            try {
-              const participants = callRef.current.participants();
-              const remoteCount = Object.values(participants).filter(
-                (p: DailyParticipant) => !p.local,
-              ).length;
-              if (remoteCount === 0) {
-                await completeAppointment();
-              }
-            } catch (_) {}
-          }
         },
       );
 
@@ -165,7 +160,7 @@ export function useDailySession({
       });
 
       // Join the room
-      await callObject.join({ url: roomUrl, token });
+      await callObject.join({ url: roomUrl, token: meetingToken });
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : 'Failed to join call';
@@ -174,7 +169,7 @@ export function useDailySession({
     }
   }, [
     roomUrl,
-    token,
+    meetingToken,
     activateAppointment,
     completeAppointment,
     refreshParticipantCount,

@@ -383,14 +383,22 @@ function HistoryTab({ history }: Readonly<{ history: HistoryEntry[] }>) {
   );
 }
 
-function MessagesTab({ user }: Readonly<{ user: AuthUser }>) {
+function MessagesTab({
+  user,
+  peerUserId,
+  peerName,
+}: Readonly<{ user: AuthUser; peerUserId: string | null; peerName: string }>) {
   return (
     <SurfaceSection eyebrow="Messages" title="Reach your care team">
       <div style={textStyles.muted}>
         Ask a question or send an update to your doctor without leaving this calmer parent view.
       </div>
       <div style={{ ...surface({ padding: 18, boxShadow: 'none' }) }}>
-        <ChatPanel userName={user.name} height={500} peerUserId="1" peerName="Dr. Preventia" />
+        {peerUserId ? (
+          <ChatPanel userName={user.name} height={500} peerUserId={peerUserId} peerName={peerName} />
+        ) : (
+          <div style={textStyles.muted}>Loading your doctor's details…</div>
+        )}
       </div>
     </SurfaceSection>
   );
@@ -405,6 +413,8 @@ export default function PatientDashboard({ user }: Readonly<Props>) {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [appointmentLoading, setAppointmentLoading] = useState(true);
   const [realUserId, setRealUserId] = useState<number>(user?.userId ?? 0);
+  const [chatPeerUserId, setChatPeerUserId] = useState<string | null>(null);
+  const [chatPeerName, setChatPeerName] = useState<string>('Your Doctor');
   const [vitals, setVitals] = useState<Vital[]>(MOCK_VITALS);
   const [conditions, setConditions] = useState<Condition[]>(MOCK_CONDITIONS);
   const [prescriptions, setPrescriptions] = useState<Prescription[]>(MOCK_PRESCRIPTIONS);
@@ -422,6 +432,21 @@ export default function PatientDashboard({ user }: Readonly<Props>) {
     })
       .then((res) => (res.ok ? res.json() as Promise<{ userId: number }> : Promise.reject(new Error(`HTTP ${res.status}`))))
       .then((me) => setRealUserId(me.userId))
+      .catch(() => {});
+  }, [user?.token]);
+
+  // Resolve the chat peer (doctor) dynamically from the backend
+  useEffect(() => {
+    if (!user?.token) return;
+    fetch('/api/v1/chat/peer', {
+      headers: { Authorization: `Bearer ${user.token}` },
+      credentials: 'include',
+    })
+      .then((res) => (res.ok ? res.json() as Promise<{ peerUserId?: string; peerName?: string }> : Promise.reject(new Error(`HTTP ${res.status}`))))
+      .then((data) => {
+        if (data.peerUserId) setChatPeerUserId(data.peerUserId);
+        if (data.peerName) setChatPeerName(data.peerName);
+      })
       .catch(() => {});
   }, [user?.token]);
 
@@ -535,7 +560,7 @@ export default function PatientDashboard({ user }: Readonly<Props>) {
   } else if (activeTab === 'HISTORY') {
     content = <HistoryTab history={history} />;
   } else if (activeTab === 'MESSAGES') {
-    content = <MessagesTab user={user} />;
+    content = <MessagesTab user={user} peerUserId={chatPeerUserId} peerName={chatPeerName} />;
   }
 
   return (

@@ -13,7 +13,7 @@
 | SPRINT-04 | eng | [SPRINT-04-push-abha-cleanup.md](./SPRINT-04-push-abha-cleanup.md) | ⬜ NOT STARTED | SPRINT-03 ✅ |
 | SPRINT-05 | ops | [SPRINT-05-nri-bridge-thyrocare.md](./SPRINT-05-nri-bridge-thyrocare.md) | ⬜ NOT STARTED | SPRINT-04 ✅ |
 | SPRINT-06 | pm  | [SPRINT-06-pm-tracking.md](./SPRINT-06-pm-tracking.md) | 🔄 ONGOING | Run daily |
-| SPRINT-07 | eng | [SPRINT-07-chat-video-foundation.md](./SPRINT-07-chat-video-foundation.md) | 🔄 IN PROGRESS | Bug fixes ✅ (305f200) |
+| SPRINT-07 | eng | [SPRINT-07-chat-video-foundation.md](./SPRINT-07-chat-video-foundation.md) | ✅ DONE | Bug fixes ✅ (305f200) |
 | SPRINT-07-OPS | ops | (infra — see below) | ✅ DONE | Parallel with SPRINT-07 |
 | SPRINT-08 | eng | [SPRINT-08-chat-video-care-comms.md](./SPRINT-08-chat-video-care-comms.md) | ⬜ NOT STARTED | SPRINT-07 ✅ + SPRINT-07-OPS ✅ |
 | SPRINT-09 | eng | [SPRINT-09-chat-video-clinical-handoff.md](./SPRINT-09-chat-video-clinical-handoff.md) | ⬜ NOT STARTED | SPRINT-08 ✅ |
@@ -25,12 +25,12 @@
 
 | Ticket | Sprint | Priority | Status |
 |--------|--------|----------|--------|
-| CHAT-001 — Dynamic doctor-patient channel wiring | SPRINT-07 | 🔴 P0 | ⬜ |
-| VIDEO-005 — Zombie room auto-termination | SPRINT-07 | 🔴 P0 | ⬜ |
-| CONSULT-004 — Consent gate before video | SPRINT-07 | 🔴 P0 | ⬜ |
-| VIDEO-007 — Waiting room + doctor-ready notification | SPRINT-07 | 🟠 P1 | ⬜ |
-| VIDEO-001 — In-call chat overlay | SPRINT-07 | 🟠 P1 | ⬜ |
-| CHAT-002 — Appointment confirmation message | SPRINT-07 | 🟠 P1 | ⬜ |
+| CHAT-001 — Dynamic doctor-patient channel wiring | SPRINT-07 | 🔴 P0 | ✅ |
+| VIDEO-005 — Zombie room auto-termination | SPRINT-07 | 🔴 P0 | ✅ |
+| CONSULT-004 — Consent gate before video | SPRINT-07 | 🔴 P0 | ✅ |
+| VIDEO-007 — Waiting room + doctor-ready notification | SPRINT-07 | 🟠 P1 | ✅ |
+| VIDEO-001 — In-call chat overlay | SPRINT-07 | 🟠 P1 | ✅ |
+| CHAT-002 — Appointment confirmation message | SPRINT-07 | 🟠 P1 | ✅ |
 | CHAT-003 — Pre-consultation reminder messages | SPRINT-08 | 🟠 P1 | ⬜ |
 | CHAT-005 — Urgent message flag + SLA alert | SPRINT-08 | 🟠 P1 | ⬜ |
 | CHAT-006 — Sponsor-doctor update channel | SPRINT-08 | 🟠 P1 | ⬜ |

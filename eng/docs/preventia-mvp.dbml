@@ -1,0 +1,316 @@
+// =============================================================================
+// Preventia MVP — DBML Schema
+// Target: dbdiagram.io  (paste directly → Export PDF)
+// Clusters: Identity · Operations · Clinical
+// Relationships: Crow's Foot notation via explicit Ref block
+// Generated from: V1–V16 Flyway migrations
+// =============================================================================
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TABLE GROUP: Identity
+// users · refresh_tokens · family_relationships · family_members
+// ─────────────────────────────────────────────────────────────────────────────
+
+Table users [note: 'Core platform users across all roles. role is VARCHAR(20) since V9 (Hibernate compat). Social auth subjects added V12.'] {
+  id             bigserial    [pk, increment]
+  name           varchar(255) [not null]
+  email          varchar(320) [not null, unique, note: 'RFC 5321 max — primary login key']
+  password       varchar(255) [not null, note: 'BCrypt hash — never expose in API responses']
+  role           varchar(20)  [not null, note: 'RECIPIENT | SPONSOR | DOCTOR | PHARMACIST | ADMIN']
+  nri_proxy_id   uuid         [null,     note: 'SPONSOR only — links to proxy identity for tri-party consent flow']
+  abha_id        varchar(50)  [null,     note: 'ABDM 14-digit number or name@abdm — FHIR R4 HIE Patient/$match']
+  google_subject varchar(255) [null, unique, note: 'Google OAuth 2.0 subject claim (V12)']
+  apple_subject  varchar(255) [null, unique, note: 'Apple Sign-In subject claim (V12)']
+  created_at     timestamptz  [not null, default: `now()`]
+}
+
+Table refresh_tokens [note: 'Stateful JWT refresh store. Rotation pattern: each /auth/refresh call consumes the token and issues a fresh one. Cascade-deleted on user removal.'] {
+  id         uuid         [pk,       note: 'UUID primary key']
+  user_id    bigint       [not null, note: 'FK → users.id']
+  token      varchar(255) [not null, unique]
+  expires_at timestamptz  [not null]
+  created_at timestamptz  [not null, default: `now()`]
+}
+
+Table family_relationships [note: 'Tri-Party Consent links between NRI Sponsors and Indian Recipients. REVOKED is terminal — new row required to re-establish. Satisfies ABDM consent gateway + DPDP Act 2023 §6.'] {
+  id             bigserial    [pk, increment]
+  sponsor_id     bigint       [not null, note: 'FK → users.id — must have role = SPONSOR']
+  recipient_id   bigint       [not null, note: 'FK → users.id — must have role = RECIPIENT']
+  consent_status varchar(20)  [not null, default: 'PENDING', note: 'PENDING | GRANTED | REVOKED']
+  granted_at     timestamptz  [null,     note: 'Populated only on GRANTED transition; NULL until then']
+  created_at     timestamptz  [not null, default: `now()`]
+
+  indexes {
+    (sponsor_id, recipient_id) [unique, name: 'uq_sponsor_recipient']
+    sponsor_id                 [name: 'idx_fr_sponsor_id']
+    recipient_id               [name: 'idx_fr_recipient_id']
+  }
+}
+
+Table family_members [note: 'Dependent sub-profiles managed by a RECIPIENT user. Not full platform accounts. Distinct from family_relationships (Sponsor↔Recipient tri-party links).'] {
+  id            bigserial     [pk, increment]
+  owner_user_id bigint        [not null, note: 'FK → users.id — role = RECIPIENT; CASCADE DELETE']
+  first_name    varchar(100)  [not null]
+  last_name     varchar(100)  [not null]
+  date_of_birth date          [null]
+  phone         varchar(30)   [null]
+  email         varchar(320)  [null]
+  address       text          [null]
+  relationship  varchar(50)   [not null, default: 'OTHER',  note: 'CHILD | PARENT | SPOUSE | OTHER']
+  photo_s3_key  varchar(1000) [null,     note: 'S3 object key for profile photo; NULL until uploaded']
+  care_status   varchar(50)   [not null, default: 'ACTIVE', note: 'ACTIVE | CARE_UPDATED | PENDING_LAB | UP_TO_DATE']
+  created_at    timestamptz   [not null, default: `now()`]
+  updated_at    timestamptz   [not null, default: `now()`]
+
+  indexes {
+    (owner_user_id, created_at) [name: 'idx_fm_owner_user_id']
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TABLE GROUP: Operations
+// appointments · payments · webhook_event_log
+// ─────────────────────────────────────────────────────────────────────────────
+
+Table appointments [note: 'Teleconsultation session records. Status drives EMR write-access via Session Lock (ACTIVE→LOCKED). Daily.co room embedded per appointment — matched by room_name on webhooks.'] {
+  id              bigserial    [pk, increment]
+  recipient_id    bigint       [not null, note: 'FK → users.id — role = RECIPIENT; ON DELETE RESTRICT']
+  sponsor_id      bigint       [null,     note: 'FK → users.id — role = SPONSOR; nullable; SET NULL on delete']
+  doctor_id       bigint       [not null, note: 'FK → users.id — role = DOCTOR; ON DELETE RESTRICT']
+  start_time      timestamptz  [not null]
+  end_time        timestamptz  [not null, note: 'Constraint: end_time > start_time']
+  daily_room_url  varchar(500) [not null, note: 'Full Daily.co HTTPS URL distributed to participants']
+  daily_room_name varchar(255) [not null, unique, note: 'Short Daily.co room ID — webhook event matching key']
+  status          varchar(20)  [not null, default: 'SCHEDULED', note: 'SCHEDULED | ACTIVE | COMPLETED | LOCKED | CANCELLED | NO_SHOW']
+  created_at      timestamptz  [not null, default: `now()`]
+
+  indexes {
+    (doctor_id, start_time)   [name: 'idx_appt_doctor_id']
+    (recipient_id, start_time)[name: 'idx_appt_recipient_id']
+    daily_room_name            [name: 'idx_appt_daily_room_name']
+    status                     [name: 'idx_appt_status']
+  }
+}
+
+Table payments [note: 'Dual-gateway: Stripe (USD / NRI Sponsors) + Razorpay (INR / India). Covers consultations, medication refills, and lab orders. Refund policy: >24h = 100%, <24h = 50%, no-show patient = 0%.'] {
+  id                       bigserial     [pk, increment]
+  appointment_id           bigint        [null,     note: 'FK → appointments.id; SET NULL on appointment delete']
+  payer_id                 bigint        [not null, note: 'FK → users.id — Sponsor (USD) or Recipient (INR)']
+  amount_cents             bigint        [not null, note: 'Smallest currency unit — cents (USD) or paise (INR)']
+  currency                 varchar(3)    [not null, note: 'USD | INR']
+  gateway                  varchar(20)   [not null, note: 'STRIPE | RAZORPAY']
+  gateway_payment_id       varchar(255)  [null,     note: 'Provider payment ID — inbound webhook matching']
+  gateway_order_id         varchar(255)  [null,     note: 'Provider order ID']
+  status                   varchar(20)   [not null, default: 'PENDING', note: 'PENDING | CAPTURED | FAILED | REFUNDED']
+  payment_type             varchar(20)   [not null, note: 'CONSULTATION | MEDICATION | LAB_ORDER']
+  exchange_rate_at_capture numeric(10,4) [null,     note: 'USD→INR spot rate snapshot at capture time']
+  created_at               timestamptz   [not null, default: `now()`]
+  updated_at               timestamptz   [not null, default: `now()`]
+
+  indexes {
+    payer_id           [name: 'idx_payments_payer_id']
+    appointment_id     [name: 'idx_payments_appointment_id']
+    gateway_payment_id [name: 'idx_payments_gateway_payment_id']
+    status             [name: 'idx_payments_status']
+  }
+}
+
+Table webhook_event_log [note: 'Immutable inbound webhook log. Covers Daily.co (room lifecycle), Razorpay, Stripe (payment events), and Thyrocare (lab results + cold-chain). room_name is a soft-ref to appointments.daily_room_name — no FK enforced.'] {
+  id              bigserial    [pk, increment]
+  provider        varchar(50)  [not null, note: 'daily | razorpay | stripe | thyrocare']
+  endpoint        varchar(120) [not null, note: 'Receiving API path (e.g. /api/webhooks/daily)']
+  event_type      varchar(120) [not null, note: 'Provider-specific event name (e.g. meeting.ended)']
+  reference_id    varchar(255) [null,     note: 'Payment ID, order ID, or lab external_order_id']
+  room_name       varchar(255) [null,     note: 'Soft-ref → appointments.daily_room_name — no FK']
+  status_code     int          [not null, note: 'HTTP status code returned to provider']
+  signature_valid boolean      [null,     note: 'HMAC signature check result; NULL if not verified']
+  payload_summary text         [null,     note: 'Truncated payload for ops debugging']
+  created_at      timestamptz  [not null, default: `now()`]
+
+  indexes {
+    (provider, created_at) [name: 'idx_webhook_event_provider_created']
+    (status_code, created_at) [name: 'idx_webhook_event_status_created']
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TABLE GROUP: Clinical
+// soap_notes · prescription_audit_log · lab_orders
+// cold_chain_test_codes · medications · inventory_audit_log
+// ─────────────────────────────────────────────────────────────────────────────
+
+Table soap_notes [note: 'SOAP clinical notes (FHIR R4 Composition-aligned). EMR write-access gated by appointment.status = ACTIVE and Daily.co session_token. prescription_s3_keys added V14 for multi-file upload.'] {
+  id                       bigserial      [pk, increment]
+  appointment_id           bigint         [null,     note: 'FK → appointments.id; SET NULL on appointment delete']
+  patient_id               bigint         [not null, note: 'FK → users.id — role = RECIPIENT']
+  doctor_id                bigint         [not null, note: 'FK → users.id — role = DOCTOR']
+  subjective               text           [null,     note: 'S: patient-reported symptoms']
+  objective                text           [null,     note: 'O: vitals, exam findings, lab results']
+  assessment               text           [null,     note: 'A: differential diagnosis']
+  plan                     text           [null,     note: 'P: prescriptions, referrals, follow-up']
+  session_token            varchar(500)   [null,     note: 'Daily.co session ID authorising this EMR write — Safety Rail §7']
+  prescription_s3_key      varchar(1000)  [null,     note: 'Primary prescription PDF S3 object key']
+  prescription_s3_keys     text           [null,     note: 'PostgreSQL TEXT[] — all uploaded PDF S3 keys; index 0 mirrors prescription_s3_key (V14)']
+  prescription_status      varchar(50)    [not null, default: 'NONE', note: 'NONE | PENDING_VERIFICATION | APPROVED | REJECTED | AWAITING_CLARIFICATION | DISPATCHED']
+  prescription_uploaded_at timestamptz    [null,     note: 'SLA clock start — 4-hour escalation window']
+  created_at               timestamptz    [not null, default: `now()`]
+  updated_at               timestamptz    [not null, default: `now()`]
+
+  indexes {
+    (patient_id, created_at)                  [name: 'idx_soap_patient_id']
+    appointment_id                             [name: 'idx_soap_appointment_id']
+    (prescription_status, prescription_uploaded_at) [name: 'idx_soap_prescription_status']
+  }
+}
+
+Table prescription_audit_log [note: 'Immutable INSERT-only audit trail for every prescription action. Satisfies DPDP Act 2023 audit requirements. actor_id is NULL for system-generated events (ORDER_CREATED, SLA_BREACH_ESCALATED).'] {
+  id           bigserial    [pk, increment]
+  soap_note_id bigint       [not null, note: 'FK → soap_notes.id; ON DELETE RESTRICT']
+  actor_id     bigint       [null,     note: 'FK → users.id; NULL for system actions; SET NULL on user delete']
+  action       varchar(60)  [not null, note: 'UPLOADED | VIEWED | APPROVED | REJECTED | CLARIFICATION_REQUESTED | CLARIFICATION_RECEIVED | ORDER_CREATED | DISPATCHED | SLA_BREACH_ESCALATED']
+  reason       text         [null,     note: 'Required for REJECTED; optional otherwise']
+  metadata     jsonb        [null,     note: 'Structured context: { orderId, trackingNumber, presignedUrlExpiry }']
+  created_at   timestamptz  [not null, default: `now()`]
+
+  indexes {
+    (soap_note_id, created_at) [name: 'idx_audit_soap_note']
+    actor_id                   [name: 'idx_audit_actor_id']
+    (action, created_at)       [name: 'idx_audit_action']
+  }
+}
+
+Table lab_orders [note: 'Diagnostic lab orders created after teleconsultations. Supports cold-chain tracking for temperature-sensitive samples. Primary integration: Thyrocare REST API. MANUAL fallback via ops team.'] {
+  id                  bigserial     [pk, increment]
+  appointment_id      bigint        [not null, note: 'FK → appointments.id; ON DELETE RESTRICT']
+  patient_id          bigint        [not null, note: 'FK → users.id — role = RECIPIENT; ON DELETE RESTRICT']
+  lab_partner         varchar(30)   [not null, default: 'THYROCARE', note: 'THYROCARE | LAL_PATHLABS | METROPOLIS | SRL | LOCAL_ICMR | MANUAL']
+  test_code           varchar(100)  [not null, note: 'LOINC or proprietary code — soft-ref cold_chain_test_codes.test_code']
+  test_name           varchar(255)  [null,     note: 'Human-readable label for display']
+  external_order_id   varchar(255)  [null,     note: 'Lab API orderId — inbound webhook matching key']
+  tracking_id         varchar(255)  [null,     note: 'Lab tracking ID for real-time phlebotomy/transit updates']
+  status              varchar(20)   [not null, default: 'ORDERED', note: 'ORDERED | COLLECTED | IN_TRANSIT | RESULTED | FAILED']
+  scheduled_at        timestamptz   [null,     note: 'Requested phlebotomy appointment slot']
+  collected_at        timestamptz   [null,     note: 'Actual sample collection time (from webhook)']
+  resulted_at         timestamptz   [null,     note: 'Results available timestamp (from webhook)']
+  requires_cold_chain boolean       [not null, default: false]
+  last_temp_reading   numeric(5,2)  [null,     note: 'Most recent temperature in °C (2 d.p.)']
+  temp_unit           varchar(10)   [null,     default: 'CELSIUS']
+  temp_logged_at      timestamptz   [null]
+  cold_chain_breached boolean       [not null, default: false, note: 'TRUE triggers immediate ops alert; doctor notified before report release']
+  result_pdf_key      varchar(500)  [null,     note: 'S3 key: lab-reports/{patientId}/{externalOrderId}.pdf; NULL until RESULTED']
+  collection_address  text          [null,     note: 'Denormalised address snapshot at order time (patient may move)']
+  notes               text          [null,     note: 'Ops notes or manual fallback comments']
+  created_at          timestamptz   [not null, default: `now()`]
+  updated_at          timestamptz   [not null, default: `now()`]
+
+  indexes {
+    appointment_id     [name: 'idx_lab_orders_appointment_id']
+    patient_id         [name: 'idx_lab_orders_patient_id']
+    external_order_id  [name: 'idx_lab_orders_external_order_id']
+    tracking_id        [name: 'idx_lab_orders_tracking_id']
+    status             [name: 'idx_lab_orders_status']
+  }
+}
+
+Table cold_chain_test_codes [note: 'Reference table: tests requiring cold-chain handling. Seeded with LOINC + proprietary codes. max/min_temp_celsius define the safe transport range — breach triggers ops alert.'] {
+  test_code        varchar(100) [pk,       note: 'LOINC code (e.g. 20448-7) or proprietary (e.g. TC-PCR)']
+  test_name        varchar(255) [not null]
+  max_temp_celsius numeric(4,1) [not null, default: 8.0,  note: 'Upper safe limit in °C']
+  min_temp_celsius numeric(4,1) [not null, default: 2.0,  note: 'Lower safe limit in °C']
+  notes            text         [null]
+  created_at       timestamptz  [not null, default: `now()`]
+}
+
+Table medications [note: 'Active medication inventory per patient. Low-stock alert threshold: floor(total_quantity / daily_dosage) ≤ 7 days remaining. unit_price_inr feeds Razorpay refill flow.'] {
+  id             bigserial     [pk, increment]
+  patient_id     bigint        [not null, note: 'FK → users.id — role = RECIPIENT; ON DELETE RESTRICT']
+  drug_name      varchar(255)  [not null]
+  total_quantity int           [not null, note: 'Current stock on hand (≥ 0)']
+  daily_dosage   int           [not null, note: 'Units consumed per day (> 0) — used to compute days_remaining']
+  unit_price_inr numeric(10,2) [null,     note: 'Price per unit in INR — Razorpay refill order amount']
+  updated_at     timestamptz   [not null, default: `now()`]
+  created_at     timestamptz   [not null, default: `now()`]
+
+  indexes {
+    patient_id [name: 'idx_med_patient']
+  }
+}
+
+Table inventory_audit_log [note: 'Immutable audit trail for all medication stock changes per PRD §5. source = SAHAYAK captures physical care-assistant counts. actor_id is NULL for SYSTEM-initiated changes.'] {
+  id              bigserial    [pk, increment]
+  medication_id   bigint       [not null, note: 'FK → medications.id; ON DELETE RESTRICT']
+  quantity_before int          [not null]
+  quantity_after  int          [not null]
+  source          varchar(20)  [not null, note: 'SYSTEM | SAHAYAK | USER']
+  actor_id        bigint       [null,     note: 'FK → users.id; NULL for SYSTEM; SET NULL on user delete']
+  note            text         [null]
+  created_at      timestamptz  [not null, default: `now()`]
+
+  indexes {
+    (medication_id, created_at) [name: 'idx_audit_medication']
+  }
+}
+
+
+// =============================================================================
+// TABLE GROUPS  (dbdiagram.io visual clusters)
+// =============================================================================
+
+TableGroup Identity {
+  users
+  refresh_tokens
+  family_relationships
+  family_members
+}
+
+TableGroup Operations {
+  appointments
+  payments
+  webhook_event_log
+}
+
+TableGroup Clinical {
+  soap_notes
+  prescription_audit_log
+  lab_orders
+  cold_chain_test_codes
+  medications
+  inventory_audit_log
+}
+
+
+// =============================================================================
+// RELATIONSHIPS  (Crow's Foot — all FKs in one place)
+// ">" = many-to-one  (FK side > PK side)
+// =============================================================================
+
+// ── Identity ─────────────────────────────────────────────
+Ref: refresh_tokens.user_id             > users.id
+Ref: family_relationships.sponsor_id    > users.id
+Ref: family_relationships.recipient_id  > users.id
+Ref: family_members.owner_user_id       > users.id
+
+// ── Operations ───────────────────────────────────────────
+Ref: appointments.recipient_id          > users.id
+Ref: appointments.sponsor_id            > users.id
+Ref: appointments.doctor_id             > users.id
+Ref: payments.appointment_id            > appointments.id
+Ref: payments.payer_id                  > users.id
+
+// ── Clinical ─────────────────────────────────────────────
+Ref: soap_notes.appointment_id          > appointments.id
+Ref: soap_notes.patient_id              > users.id
+Ref: soap_notes.doctor_id               > users.id
+Ref: prescription_audit_log.soap_note_id > soap_notes.id
+Ref: prescription_audit_log.actor_id    > users.id
+Ref: lab_orders.appointment_id          > appointments.id
+Ref: lab_orders.patient_id              > users.id
+Ref: lab_orders.test_code               > cold_chain_test_codes.test_code
+
+// ── Pharmacy (within Clinical group) ─────────────────────
+Ref: medications.patient_id             > users.id
+Ref: inventory_audit_log.medication_id  > medications.id
+Ref: inventory_audit_log.actor_id       > users.id

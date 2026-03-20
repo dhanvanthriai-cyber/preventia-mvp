@@ -13,6 +13,48 @@
 | SPRINT-04 | eng | [SPRINT-04-push-abha-cleanup.md](./SPRINT-04-push-abha-cleanup.md) | ⬜ NOT STARTED | SPRINT-03 ✅ |
 | SPRINT-05 | ops | [SPRINT-05-nri-bridge-thyrocare.md](./SPRINT-05-nri-bridge-thyrocare.md) | ⬜ NOT STARTED | SPRINT-04 ✅ |
 | SPRINT-06 | pm  | [SPRINT-06-pm-tracking.md](./SPRINT-06-pm-tracking.md) | 🔄 ONGOING | Run daily |
+| SPRINT-07 | eng | [SPRINT-07-chat-video-foundation.md](./SPRINT-07-chat-video-foundation.md) | ⬜ NOT STARTED | Bug fixes ✅ (305f200) |
+| SPRINT-08 | eng | [SPRINT-08-chat-video-care-comms.md](./SPRINT-08-chat-video-care-comms.md) | ⬜ NOT STARTED | SPRINT-07 ✅ |
+| SPRINT-09 | eng | [SPRINT-09-chat-video-clinical-handoff.md](./SPRINT-09-chat-video-clinical-handoff.md) | ⬜ NOT STARTED | SPRINT-08 ✅ |
+| SPRINT-10 | eng | [SPRINT-10-chat-video-polish.md](./SPRINT-10-chat-video-polish.md) | ⬜ NOT STARTED | SPRINT-09 ✅ |
+
+---
+
+## Chat & Video Ticket Coverage
+
+| Ticket | Sprint | Priority | Status |
+|--------|--------|----------|--------|
+| CHAT-001 — Dynamic doctor-patient channel wiring | SPRINT-07 | 🔴 P0 | ⬜ |
+| VIDEO-005 — Zombie room auto-termination | SPRINT-07 | 🔴 P0 | ⬜ |
+| CONSULT-004 — Consent gate before video | SPRINT-07 | 🔴 P0 | ⬜ |
+| VIDEO-007 — Waiting room + doctor-ready notification | SPRINT-07 | 🟠 P1 | ⬜ |
+| VIDEO-001 — In-call chat overlay | SPRINT-07 | 🟠 P1 | ⬜ |
+| CHAT-002 — Appointment confirmation message | SPRINT-07 | 🟠 P1 | ⬜ |
+| CHAT-003 — Pre-consultation reminder messages | SPRINT-08 | 🟠 P1 | ⬜ |
+| CHAT-005 — Urgent message flag + SLA alert | SPRINT-08 | 🟠 P1 | ⬜ |
+| CHAT-006 — Sponsor-doctor update channel | SPRINT-08 | 🟠 P1 | ⬜ |
+| CHAT-007 — Pharmacist-doctor clarification channel | SPRINT-08 | 🟠 P1 | ⬜ |
+| CHAT-010 — Patient no-show auto-message | SPRINT-08 | 🟠 P1 | ⬜ |
+| CHAT-011 — Doctor no-show auto-message | SPRINT-08 | 🟠 P1 | ⬜ |
+| VIDEO-002 — Sponsor observer join flow | SPRINT-08 | 🟠 P1 | ⬜ |
+| VIDEO-003 — Audio-only fallback on poor network | SPRINT-08 | 🟠 P1 | ⬜ |
+| VIDEO-006 — Pre-call device check | SPRINT-08 | 🟠 P1 | ⬜ |
+| CONSULT-010 — Emergency escalation button | SPRINT-08 | 🟠 P1 | ⬜ |
+| CONSULT-006 — Video failure → chat fallback | SPRINT-08 | 🟠 P1 | ⬜ |
+| CHAT-004 — Patient async symptom updates + attachments | SPRINT-09 | 🟠 P1 | ⬜ |
+| CHAT-008 — Lab results notification | SPRINT-09 | 🟠 P1 | ⬜ |
+| CHAT-009 — Consent document via chat | SPRINT-09 | 🟠 P1 | ⬜ |
+| CHAT-012 — Post-consultation SOAP summary | SPRINT-09 | 🟠 P1 | ⬜ |
+| CONSULT-002 — Prescription notification + pharmacy routing | SPRINT-09 | 🟠 P1 | ⬜ |
+| CONSULT-003 — SOAP pre-population from chat context | SPRINT-09 | 🟠 P1 | ⬜ |
+| CONSULT-005 — Sponsor live updates during consultation | SPRINT-09 | 🟡 P2 | ⬜ |
+| CHAT-013 — Follow-up appointment scheduling via chat | SPRINT-09 | 🟡 P2 | ⬜ |
+| CHAT-014 — Multi-party care team group channel | SPRINT-10 | 🟡 P2 | ⬜ |
+| CONSULT-001 — Unified consultation timeline | SPRINT-10 | 🟡 P2 | ⬜ |
+| VIDEO-004 — Post-call transcript + recording | SPRINT-10 | 🟡 P2 | ⬜ |
+| CONSULT-007 — Recurring care plan check-ins | SPRINT-10 | 🟡 P2 | ⬜ |
+| CONSULT-009 — Satisfaction survey | SPRINT-10 | 🟡 P2 | ⬜ |
+| CONSULT-008 — Second opinion request | SPRINT-10 | 🟢 P3 | ⬜ |
 
 ---
 

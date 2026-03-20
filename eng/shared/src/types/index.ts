@@ -97,3 +97,55 @@ export interface SoapNote {
   doctorId: number;
   patientId: number;
 }
+
+// ─── Family Members ───────────────────────────────────────────────────────────
+
+export type RelationshipType = 'CHILD' | 'PARENT' | 'SPOUSE' | 'OTHER';
+
+export type FamilyMemberCareStatus =
+  | 'ACTIVE'
+  | 'CARE_UPDATED'
+  | 'PENDING_LAB'
+  | 'UP_TO_DATE';
+
+export interface FamilyMember {
+  id: number;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  initials: string;
+  dateOfBirth?: string;   // ISO date "YYYY-MM-DD"
+  phone?: string;
+  email?: string;
+  address?: string;
+  relationship: RelationshipType;
+  photoUrl?: string;
+  careStatus: FamilyMemberCareStatus;
+  createdAt: string;      // ISO-8601 instant
+}
+
+export interface AddFamilyMemberRequest {
+  firstName: string;
+  lastName: string;
+  dateOfBirth?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  relationship: RelationshipType;
+}
+
+// ─── Service Enrollment ───────────────────────────────────────────────────────
+
+export interface WellnessProgram {
+  id: string;
+  name: string;
+  description: string;
+  priceMonthly: number;
+  currency: string;
+}
+
+export interface EnrollmentRequest {
+  programId: string;
+  memberIds: number[];
+  addOns: string[];
+}

@@ -42,11 +42,17 @@ public class JwtTokenProvider {
         this.expirationMs = expirationMs;
     }
 
-    public String generateToken(Authentication auth, String role) {
+    /**
+     * Generate a signed JWT embedding the user's email (sub), role, and userId.
+     * userId is required so the frontend can resolve the authenticated user's
+     * database ID from the token without a round-trip to /api/v1/auth/me.
+     */
+    public String generateToken(Authentication auth, String role, Long userId) {
         Date now = new Date();
         return Jwts.builder()
             .subject(auth.getName())
             .claim("role", role)
+            .claim("userId", userId)
             .issuedAt(now)
             .expiration(new Date(now.getTime() + expirationMs))
             .signWith(key)
@@ -59,6 +65,12 @@ public class JwtTokenProvider {
 
     public String getRole(String token) {
         return (String) parseClaims(token).get("role");
+    }
+
+    public Long getUserId(String token) {
+        Object raw = parseClaims(token).get("userId");
+        if (raw instanceof Number n) return n.longValue();
+        return null;
     }
 
     public boolean validateToken(String token) {

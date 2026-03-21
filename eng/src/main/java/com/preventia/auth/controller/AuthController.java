@@ -161,7 +161,7 @@ public class AuthController {
         Authentication auth = new UsernamePasswordAuthenticationToken(
             user.getEmail(), null, List.of()
         );
-        String newAccessToken = jwtProvider.generateToken(auth, user.getRole().name());
+        String newAccessToken = jwtProvider.generateToken(auth, user.getRole().name(), user.getId());
 
         RefreshResponse response = new RefreshResponse(
             newAccessToken,

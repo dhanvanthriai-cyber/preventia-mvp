@@ -77,7 +77,7 @@ public class SocialAuthService {
 
         User user = resolveUser(provider, identity, requestedRole);
         Authentication auth = new UsernamePasswordAuthenticationToken(user.getEmail(), null, List.of());
-        String accessToken = jwtProvider.generateToken(auth, user.getRole().name());
+        String accessToken = jwtProvider.generateToken(auth, user.getRole().name(), user.getId());
         RefreshToken refreshToken = refreshTokenService.createForUser(user);
 
         return new JwtResponse(

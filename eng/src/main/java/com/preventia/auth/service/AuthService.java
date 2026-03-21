@@ -50,7 +50,7 @@ public class AuthService {
         User user = userRepo.findByEmail(request.email())
             .orElseThrow(() -> new IllegalStateException("Authenticated user not found"));
 
-        String accessToken = jwtProvider.generateToken(auth, user.getRole().name());
+        String accessToken = jwtProvider.generateToken(auth, user.getRole().name(), user.getId());
         RefreshToken refreshToken = refreshTokenService.createForUser(user);
 
         return new JwtResponse(
@@ -82,20 +82,20 @@ public class AuthService {
         user.setEmail(request.email());
         user.setPassword(passwordEncoder.encode(request.password()));
         user.setRole(request.role());
-        userRepo.save(user);
+        User saved = userRepo.save(user);
 
         // Build a lightweight Authentication just to satisfy JwtTokenProvider#generateToken,
         // which only needs getName() (= email) and the role claim.
         Authentication auth = new UsernamePasswordAuthenticationToken(
-            user.getEmail(), null, List.of()
+            saved.getEmail(), null, List.of()
         );
-        String accessToken = jwtProvider.generateToken(auth, user.getRole().name());
-        RefreshToken refreshToken = refreshTokenService.createForUser(user);
+        String accessToken = jwtProvider.generateToken(auth, saved.getRole().name(), saved.getId());
+        RefreshToken refreshToken = refreshTokenService.createForUser(saved);
 
         return new JwtResponse(
             accessToken,
             jwtProvider.getExpirationSeconds(),
-            user.getRole().name(),
+            saved.getRole().name(),
             refreshToken.getToken()
         );
     }
@@ -114,18 +114,18 @@ public class AuthService {
         user.setEmail(request.email());
         user.setPassword(passwordEncoder.encode(request.password()));
         user.setRole(User.Role.ADMIN);
-        userRepo.save(user);
+        User saved = userRepo.save(user);
 
         Authentication auth = new UsernamePasswordAuthenticationToken(
-            user.getEmail(), null, List.of()
+            saved.getEmail(), null, List.of()
         );
-        String accessToken = jwtProvider.generateToken(auth, user.getRole().name());
-        RefreshToken refreshToken = refreshTokenService.createForUser(user);
+        String accessToken = jwtProvider.generateToken(auth, saved.getRole().name(), saved.getId());
+        RefreshToken refreshToken = refreshTokenService.createForUser(saved);
 
         return new JwtResponse(
             accessToken,
             jwtProvider.getExpirationSeconds(),
-            user.getRole().name(),
+            saved.getRole().name(),
             refreshToken.getToken()
         );
     }

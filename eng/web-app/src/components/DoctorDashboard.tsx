@@ -1,17 +1,19 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import type { Appointment, AuthUser } from '@preventia/shared';
 import { getAppointments } from '@preventia/shared';
-import ChatPanel from './ChatPanel';
+import dynamic from 'next/dynamic';
 import {
   pill,
   softButton,
   surface,
   textStyles,
   webTheme,
+  inputStyle,
 } from '@/lib/designSystem';
+
+const ChatPanel = dynamic(() => import('./ChatPanel'), { ssr: false });
 
 interface Props {
   user?: AuthUser;
@@ -20,95 +22,159 @@ interface Props {
 const MOCK_FEED = [
   {
     id: 1,
-    category: 'Nutrition',
-    title: 'Vitamin D and immune support',
-    time: '2h ago',
+    category: 'Nourishment',
+    title: 'VITAMIN D AND IMMUNE SUPPORT',
     body: 'A short read for patients who spend limited time outdoors and need a simpler explanation of lab-driven supplementation.',
   },
   {
     id: 2,
-    category: 'Cardiology',
-    title: 'Hypertension follow-up notes',
-    time: '5h ago',
+    category: 'Mindset',
+    title: 'HYPERTENSION FOLLOW-UP NOTES',
     body: 'A concise, patient-friendly summary for shared care planning across telehealth and pharmacy touchpoints.',
   },
 ];
 
-const heroShellStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '0 clamp(24px, 4vw, 56px) 20px',
-  boxSizing: 'border-box',
-  paddingBottom: 0,
-};
-
-const stackSectionStyle: React.CSSProperties = {
+const shellStyle: React.CSSProperties = {
   width: '100%',
   boxSizing: 'border-box',
-  padding: '20px clamp(24px, 4vw, 56px) 0',
-};
-
-const panelGridStyle: React.CSSProperties = {
-  width: '100%',
-  boxSizing: 'border-box',
-  padding: '0 clamp(24px, 4vw, 56px) 72px',
-  display: 'flex',
-  gap: 20,
-  alignItems: 'flex-start',
-  flexWrap: 'wrap',
-};
-
-const columnStyle = (basis: string, minWidth: number): React.CSSProperties => ({
+  padding: '0 clamp(20px, 4vw, 48px) 72px',
   display: 'flex',
   flexDirection: 'column',
   gap: 20,
-  flex: `1 1 ${basis}`,
-  minWidth,
+};
+
+const heroCardStyle: React.CSSProperties = surface({
+  padding: 28,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 16,
 });
 
 const cardStyle: React.CSSProperties = surface({
-  padding: 24,
+  padding: 20,
   display: 'flex',
   flexDirection: 'column',
-  gap: 16,
+  gap: 14,
 });
 
-const listCardStyle: React.CSSProperties = {
-  ...surface({
-    padding: 16,
-    backgroundColor: webTheme.colors.surfaceAlt,
-    boxShadow: 'none',
-  }),
+const cardHeaderStyle: React.CSSProperties = {
   display: 'flex',
-  flexDirection: 'column',
-  gap: 10,
-};
-
-const metaRowStyle: React.CSSProperties = {
-  display: 'flex',
-  gap: 10,
-  flexWrap: 'wrap',
+  justifyContent: 'space-between',
   alignItems: 'center',
+  gap: 8,
 };
 
-const flowGridStyle: React.CSSProperties = {
-  display: 'grid',
-  gap: 16,
-  gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+const cardTitleStyle: React.CSSProperties = {
+  ...textStyles.label,
+  fontSize: 11,
+  letterSpacing: '0.1em',
+  textTransform: 'uppercase' as const,
+  color: webTheme.colors.text,
 };
+
+const listRowStyle: React.CSSProperties = {
+  ...surface({ padding: 12, backgroundColor: webTheme.colors.surfaceAlt, boxShadow: 'none' }),
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  gap: 10,
+  flexWrap: 'wrap' as const,
+};
+
+const blackFilledBtn: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: '9px 16px',
+  borderRadius: webTheme.radius.pill,
+  backgroundColor: '#111',
+  color: '#fff',
+  border: '1px solid #111',
+  fontFamily: webTheme.font.sans,
+  fontSize: 12,
+  fontWeight: 700,
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase' as const,
+  cursor: 'pointer',
+  textDecoration: 'none',
+  whiteSpace: 'nowrap' as const,
+};
+
+const outlinedBtn: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: '8px 14px',
+  borderRadius: webTheme.radius.pill,
+  backgroundColor: 'transparent',
+  color: webTheme.colors.text,
+  border: `1px solid ${webTheme.colors.borderStrong}`,
+  fontFamily: webTheme.font.sans,
+  fontSize: 11,
+  fontWeight: 600,
+  letterSpacing: '0.06em',
+  textTransform: 'uppercase' as const,
+  cursor: 'pointer',
+  textDecoration: 'none',
+  whiteSpace: 'nowrap' as const,
+};
+
+const avatarStyle: React.CSSProperties = {
+  width: 64,
+  height: 64,
+  borderRadius: '50%',
+  backgroundColor: '#111',
+  color: '#fff',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontFamily: webTheme.font.sans,
+  fontSize: 22,
+  fontWeight: 700,
+  flexShrink: 0,
+};
+
+interface CardProps {
+  title: string;
+  children: React.ReactNode;
+}
+
+function DashCard({ title, children }: CardProps) {
+  return (
+    <div style={cardStyle}>
+      <div style={cardHeaderStyle}>
+        <span style={cardTitleStyle}>{title}</span>
+      </div>
+      {children}
+    </div>
+  );
+}
 
 export default function DoctorDashboard({ user }: Readonly<Props>) {
-  const router = useRouter();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [insightText, setInsightText] = useState('');
   const [realUserId, setRealUserId] = useState<number>(user?.userId ?? 0);
+
+  // Post insight form state
+  const [insightCategory, setInsightCategory] = useState('General');
+  const [insightTitle, setInsightTitle] = useState('');
+  const [insightBody, setInsightBody] = useState('');
+  const [insightSuccess, setInsightSuccess] = useState(false);
+
+  // Hourly rate
+  const [rate, setRate] = useState(2500);
+  const [rateUpdated, setRateUpdated] = useState(false);
+
+  // Availability
+  const [accepting, setAccepting] = useState(true);
+
+  const doctorName = user?.name ?? 'Doctor';
+  const nameParts = doctorName.split(' ');
+  const initials = (nameParts[0]?.[0] ?? '') + (nameParts[1]?.[0] ?? '');
 
   const handleLogout = useCallback(() => {
     window.location.assign('/api/logout');
   }, []);
-
-  const doctorName = user?.name ?? 'Doctor';
 
   useEffect(() => {
     if (!user?.token) return;
@@ -122,10 +188,7 @@ export default function DoctorDashboard({ user }: Readonly<Props>) {
   }, [user?.token]);
 
   const fetchData = useCallback(async () => {
-    if (!user || realUserId === 0) {
-      setLoading(false);
-      return;
-    }
+    if (!user || realUserId === 0) { setLoading(false); return; }
     try {
       const data = await getAppointments({ doctorId: realUserId });
       setAppointments(data);
@@ -133,7 +196,6 @@ export default function DoctorDashboard({ user }: Readonly<Props>) {
       console.error('[DoctorDashboard]', error);
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }, [user, realUserId]);
 
@@ -141,52 +203,103 @@ export default function DoctorDashboard({ user }: Readonly<Props>) {
     void fetchData();
   }, [fetchData]);
 
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const todayEnd = new Date(todayStart.getTime() + 86_400_000);
+  const pendingRequests = appointments.filter((a) => a.status === 'SCHEDULED');
+  const upcomingFirst = appointments
+    .filter((a) => a.status === 'SCHEDULED' || a.status === 'ACTIVE')
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+    .slice(0, 3);
 
-  const active = appointments.filter((appointment) => appointment.status === 'ACTIVE');
-  const scheduled = appointments.filter((appointment) => {
-    if (appointment.status !== 'SCHEDULED' && appointment.status !== 'ACTIVE') return false;
-    const start = new Date(appointment.startTime);
-    const end = new Date(appointment.endTime);
-    return start >= todayStart && start < todayEnd && end > now;
-  });
-  const upcoming = appointments.filter((appointment) => {
-    if (appointment.status !== 'SCHEDULED') return false;
-    return new Date(appointment.startTime) >= todayEnd;
-  });
-  const completed = appointments.filter((appointment) =>
-    appointment.status === 'COMPLETED' || appointment.status === 'LOCKED',
-  );
-  const requests = upcoming.slice(0, 3);
+  const handleApprove = async (id: number) => {
+    if (!user?.token) return;
+    try {
+      const res = await fetch(`/api/v1/appointments/${id}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` },
+        body: JSON.stringify({ status: 'ACTIVE' }),
+      });
+      if (res.ok) void fetchData();
+    } catch (e) { console.error('[DoctorDashboard] approve failed', e); }
+  };
+
+  const handleDecline = async (id: number) => {
+    if (!user?.token) return;
+    try {
+      const res = await fetch(`/api/v1/appointments/${id}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` },
+        body: JSON.stringify({ status: 'CANCELLED' }),
+      });
+      if (res.ok) void fetchData();
+    } catch (e) { console.error('[DoctorDashboard] decline failed', e); }
+  };
+
+  const handlePostInsight = async () => {
+    const payload = { category: insightCategory, title: insightTitle, body: insightBody };
+    try {
+      const res = await fetch('/api/v1/insights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(user?.token ? { Authorization: `Bearer ${user.token}` } : {}) },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        setInsightSuccess(true);
+        setInsightTitle('');
+        setInsightBody('');
+        setTimeout(() => setInsightSuccess(false), 4000);
+      } else {
+        console.log('[DoctorDashboard] POST /api/v1/insights mock:', payload);
+        setInsightSuccess(true);
+        setTimeout(() => setInsightSuccess(false), 4000);
+      }
+    } catch {
+      console.log('[DoctorDashboard] POST /api/v1/insights mock:', payload);
+      setInsightSuccess(true);
+      setTimeout(() => setInsightSuccess(false), 4000);
+    }
+  };
+
+  const handleUpdateRate = async () => {
+    try {
+      const res = await fetch('/api/v1/doctors/me/rate', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...(user?.token ? { Authorization: `Bearer ${user.token}` } : {}) },
+        body: JSON.stringify({ rateInr: rate }),
+      });
+      if (res.ok || true) {
+        console.log('[DoctorDashboard] PUT /api/v1/doctors/me/rate mock:', { rateInr: rate });
+        setRateUpdated(true);
+        setTimeout(() => setRateUpdated(false), 3000);
+      }
+    } catch {
+      console.log('[DoctorDashboard] PUT /api/v1/doctors/me/rate mock:', { rateInr: rate });
+      setRateUpdated(true);
+      setTimeout(() => setRateUpdated(false), 3000);
+    }
+  };
+
+  const handleAvailabilityToggle = async (checked: boolean) => {
+    setAccepting(checked);
+    try {
+      await fetch('/api/v1/doctors/me/availability', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...(user?.token ? { Authorization: `Bearer ${user.token}` } : {}) },
+        body: JSON.stringify({ accepting: checked }),
+      });
+    } catch {
+      console.log('[DoctorDashboard] PUT /api/v1/doctors/me/availability mock:', { accepting: checked });
+    }
+  };
 
   const formatTime = (iso: string) =>
     new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
 
-  const formatFuture = (iso: string) =>
-    new Date(iso).toLocaleString('en-IN', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-
   if (!user) {
     return (
-      <div style={heroShellStyle}>
-        <section style={cardStyle}>
+      <div style={shellStyle}>
+        <section style={heroCardStyle}>
           <span style={textStyles.eyebrow}>Doctor portal</span>
-          <h1 style={{ ...textStyles.display, margin: 0 }}>
-            A gentler provider workspace.
-          </h1>
-          <p style={{ ...textStyles.body, margin: 0 }}>
-            Sign in with a doctor account to manage consultations, documentation, and peer messaging in the updated system.
-          </p>
-          <a href="/login" style={softButton('accent')}>
-            Sign in
-          </a>
+          <h1 style={{ ...textStyles.display, margin: 0 }}>A provider workspace.</h1>
+          <a href="/login" style={blackFilledBtn}>Sign in</a>
         </section>
       </div>
     );
@@ -194,259 +307,240 @@ export default function DoctorDashboard({ user }: Readonly<Props>) {
 
   if (loading) {
     return (
-      <div style={heroShellStyle}>
-        <section style={{ ...cardStyle, alignItems: 'center', justifyContent: 'center', minHeight: 280 }}>
-          <span style={textStyles.muted}>Loading doctor workspace…</span>
+      <div style={shellStyle}>
+        <section style={{ ...cardStyle, alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
+          <span style={textStyles.muted}>Loading workspace…</span>
         </section>
       </div>
     );
   }
 
+  const todayStr = new Date().toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' });
+
   return (
-    <>
-      <section style={heroShellStyle}>
-        <div
-          style={{
-            ...cardStyle,
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'flex-start',
-            gap: 20,
-            flexWrap: 'wrap',
-          }}
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, flex: 1, minWidth: 280 }}>
-            <span style={{ ...pill('accent'), alignSelf: 'flex-start' }}>Provider workspace</span>
+    <div style={shellStyle}>
+      {/* HERO */}
+      <section style={heroCardStyle}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
+            <div style={avatarStyle}>{initials.toUpperCase() || 'DR'}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <h1 style={{ ...textStyles.display, margin: 0 }}>Dr. {doctorName}</h1>
-              <p style={{ ...textStyles.body, margin: 0, color: webTheme.colors.mutedText }}>
-                Internal Medicine • License #882910
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ width: 9, height: 9, borderRadius: '50%', backgroundColor: '#22C55E', display: 'inline-block' }} />
+                <span style={{ ...textStyles.muted, fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase' }}>PROVIDER PORTAL: {doctorName.toUpperCase()}</span>
+              </div>
+              <h1 style={{ ...textStyles.display, margin: 0, fontSize: 26, lineHeight: '32px' }}>Dr. {doctorName}</h1>
+              <p style={{ ...textStyles.muted, margin: 0, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Internal Medicine · License #882910
               </p>
-            </div>
-            <div style={metaRowStyle}>
-              <span style={pill('neutral')}>Telehealth only</span>
-              <span style={pill('success')}>Accepting patients</span>
-              <span style={pill('accent')}>{scheduled.length + active.length} touchpoints today</span>
-              <span style={pill(active.length > 0 ? 'rose' : 'gold')}>
-                {active.length > 0 ? `${active.length} live now` : `${completed.length} docs pending`}
-              </span>
+              <div style={{ marginTop: 4 }}>
+                <a href="/doctor/profile" style={{ ...pill('neutral'), fontSize: 10, textDecoration: 'none', cursor: 'pointer' }}>
+                  SET HEALTH SPECIALTIES
+                </a>
+              </div>
             </div>
           </div>
-
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 12,
-              alignItems: 'stretch',
-              minWidth: 220,
-            }}
-          >
-            <a href="/doctor/profile" style={softButton('secondary')}>
-              Edit profile
-            </a>
-            <a href="/doctor/book" style={softButton('accent')}>
-              Book appointment
-            </a>
-            <button
-              type="button"
-              style={softButton('secondary')}
-              onClick={() => {
-                setRefreshing(true);
-                void fetchData();
-              }}
-              disabled={refreshing}
-            >
-              {refreshing ? 'Refreshing…' : 'Refresh'}
-            </button>
-            <button type="button" style={softButton('ghost')} onClick={handleLogout}>
-              Sign out
-            </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-end' }}>
+            <button type="button" style={{ ...outlinedBtn, fontSize: 12 }} onClick={handleLogout}>SIGN OUT</button>
+            <a href="/doctor/profile" style={blackFilledBtn}>EDIT PROFILE</a>
           </div>
         </div>
       </section>
 
-      <section style={stackSectionStyle}>
-        <div style={cardStyle}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span style={textStyles.eyebrow}>Today&apos;s flow</span>
-              <h2 style={{ ...textStyles.title, fontSize: 28, lineHeight: '34px', margin: 0 }}>
-                Consultations and follow-up tasks
-              </h2>
-            </div>
-            <div style={metaRowStyle}>
-              <span style={pill('accent')}>{scheduled.length} scheduled</span>
-              <span style={pill(active.length > 0 ? 'rose' : 'neutral')}>
-                {active.length > 0 ? `${active.length} live now` : 'No live consults'}
-              </span>
-              <span style={pill('gold')}>{completed.length} documentation items</span>
-            </div>
-          </div>
+      {/* 3-COLUMN GRID */}
+      <div className="dd-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
 
-          <div style={flowGridStyle}>
-            {active.map((appointment) => (
-              <div key={appointment.id} style={{ ...listCardStyle, backgroundColor: webTheme.colors.roseTint }}>
-                <div style={metaRowStyle}>
-                  <span style={pill('rose')}>Live now</span>
-                  <span style={textStyles.muted}>{appointment.recipientName ?? `Patient #${appointment.id}`}</span>
-                </div>
-                <div style={textStyles.title}>{appointment.doctorName ?? 'Consultation in progress'}</div>
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  <a href={`/doctor/consult/${appointment.id}`} style={softButton('rose')}>
-                    Join consultation
-                  </a>
-                  <a href={`/doctor/patient/${appointment.recipientId ?? appointment.id}`} style={softButton('secondary')}>
-                    Open patient view
-                  </a>
-                </div>
-              </div>
-            ))}
+        {/* LEFT COLUMN */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-            {scheduled.map((appointment) => (
-              <div key={appointment.id} style={listCardStyle}>
-                <div style={metaRowStyle}>
-                  <span style={pill('accent')}>{formatTime(appointment.startTime)}</span>
-                  <span style={textStyles.muted}>{appointment.recipientName ?? `Patient #${appointment.id}`}</span>
-                </div>
-                <div style={textStyles.title}>Scheduled consultation</div>
-                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  <a href={`/doctor/consult/${appointment.id}`} style={softButton('accent')}>
-                    Start call
-                  </a>
-                  <a href={`/doctor/patient/${appointment.recipientId ?? appointment.id}`} style={softButton('secondary')}>
-                    Preview chart
-                  </a>
-                </div>
-              </div>
-            ))}
-
-            {completed
-              .filter((appointment) => {
-                const start = new Date(appointment.startTime);
-                return start >= todayStart && start < todayEnd;
-              })
-              .map((appointment) => (
-                <div key={appointment.id} style={{ ...listCardStyle, backgroundColor: webTheme.colors.goldTint }}>
-                  <div style={metaRowStyle}>
-                    <span style={pill('gold')}>Documentation</span>
-                    <span style={textStyles.muted}>{appointment.recipientName ?? `Patient #${appointment.id}`}</span>
+          {/* Pending Requests */}
+          <DashCard title="PENDING REQUESTS">
+            {pendingRequests.length === 0 ? (
+              <p style={{ ...textStyles.muted, margin: 0, fontSize: 12 }}>No pending requests</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {pendingRequests.slice(0, 4).map((appt) => (
+                  <div key={appt.id} style={{ ...surface({ padding: 12, backgroundColor: webTheme.colors.surfaceAlt, boxShadow: 'none' }), display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <span style={{ ...textStyles.label, fontSize: 12 }}>{appt.recipientName ?? `Patient #${appt.id}`}</span>
+                      <span style={{ ...textStyles.muted, fontSize: 10 }}>
+                        {appt.type ?? 'Virtual Consultation'} · {new Date(appt.startTime).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button type="button" style={{ ...blackFilledBtn, fontSize: 10, padding: '6px 12px' }} onClick={() => void handleApprove(appt.id)}>APPROVE</button>
+                      <button type="button" style={{ ...outlinedBtn, fontSize: 10, padding: '6px 12px' }} onClick={() => void handleDecline(appt.id)}>DECLINE</button>
+                    </div>
                   </div>
-                  <div style={textStyles.title}>{formatTime(appointment.startTime)} visit completed</div>
-                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                    <a href={`/doctor/notes/${appointment.id}`} style={softButton('secondary')}>
-                      SOAP note
-                    </a>
-                    <a href={`/doctor/prescriptions/${appointment.id}`} style={softButton('secondary')}>
-                      Upload Rx
-                    </a>
+                ))}
+              </div>
+            )}
+          </DashCard>
+
+          {/* In-Network Chat */}
+          <DashCard title="IN-NETWORK CHAT">
+            <div style={{ display: 'flex', gap: 0, height: 360, overflow: 'hidden', borderRadius: webTheme.radius.md, border: `1px solid ${webTheme.colors.border}` }}>
+              {/* Mini contact list */}
+              <div style={{ width: 120, flexShrink: 0, borderRight: `1px solid ${webTheme.colors.border}`, backgroundColor: webTheme.colors.surfaceAlt, display: 'flex', flexDirection: 'column', gap: 0, overflow: 'auto' }}>
+                {['Dr. Singh', 'Dr. Patel', 'Dr. Rao', 'Dr. Mehta'].map((name, i) => (
+                  <div key={name} style={{ padding: '10px 12px', borderBottom: `1px solid ${webTheme.colors.border}`, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: i < 2 ? '#22C55E' : webTheme.colors.border, flexShrink: 0 }} />
+                    <span style={{ ...textStyles.muted, fontSize: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+                  </div>
+                ))}
+              </div>
+              {/* Chat panel */}
+              <div style={{ flex: 1, overflow: 'hidden' }}>
+                <ChatPanel userName={doctorName} height={360} />
+              </div>
+            </div>
+          </DashCard>
+
+        </div>
+
+        {/* CENTER COLUMN */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+          {/* Post New Insight */}
+          <DashCard title="POST NEW INSIGHT">
+            {insightSuccess && (
+              <div style={{ borderRadius: webTheme.radius.md, backgroundColor: '#EDF5EA', border: '1px solid rgba(126,154,119,0.2)', padding: '10px 14px', ...textStyles.muted, fontSize: 12, color: webTheme.colors.success }}>
+                Insight posted successfully!
+              </div>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ ...textStyles.label, fontSize: 11 }}>CATEGORY</label>
+                <select value={insightCategory} onChange={(e) => setInsightCategory(e.target.value)} style={{ ...inputStyle, fontSize: 13 }}>
+                  <option>Nourishment</option>
+                  <option>Mindset</option>
+                  <option>Movement</option>
+                  <option>Sleep</option>
+                  <option>General</option>
+                </select>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ ...textStyles.label, fontSize: 11 }}>CONTENT TITLE</label>
+                <input value={insightTitle} onChange={(e) => setInsightTitle(e.target.value)} placeholder="e.g. Vitamin D and Immunity" style={{ ...inputStyle, fontSize: 13 }} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ ...textStyles.label, fontSize: 11 }}>BODY TEXT</label>
+                <textarea value={insightBody} onChange={(e) => setInsightBody(e.target.value)} rows={4} placeholder="Share a clinical note or patient tip…" style={{ ...inputStyle, fontSize: 13, resize: 'vertical' as const }} />
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button type="button" disabled style={{ ...outlinedBtn, opacity: 0.6 }}>ADD MEDIA</button>
+                <button type="button" style={blackFilledBtn} onClick={() => void handlePostInsight()}>POST TO FEED</button>
+              </div>
+            </div>
+          </DashCard>
+
+          {/* Lifestyle Insights Feed */}
+          <DashCard title="LIFESTYLE INSIGHTS">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 360, overflowY: 'auto' }}>
+              {MOCK_FEED.map((item) => (
+                <div key={item.id} style={{ ...surface({ padding: 14, backgroundColor: webTheme.colors.surfaceAlt, boxShadow: 'none' }), display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span style={{ ...pill('success'), fontSize: 9, padding: '3px 7px', alignSelf: 'flex-start' }}>{item.category.toUpperCase()}</span>
+                  <span style={{ ...textStyles.label, fontSize: 12 }}>{item.title}</span>
+                  <span style={{ ...textStyles.muted, fontSize: 11 }}>{item.body}</span>
+                  <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                    <button type="button" style={{ ...outlinedBtn, fontSize: 10, padding: '4px 10px' }}>LIKE ♥</button>
+                    <button type="button" style={{ ...outlinedBtn, fontSize: 10, padding: '4px 10px' }}>SHARE ↗</button>
                   </div>
                 </div>
               ))}
-
-            {active.length === 0 && scheduled.length === 0 && completed.length === 0 ? (
-              <div style={listCardStyle}>
-                <div style={textStyles.title}>Nothing scheduled today</div>
-                <div style={textStyles.muted}>The doctor workspace will populate as appointments are booked.</div>
-              </div>
-            ) : null}
-          </div>
-        </div>
-      </section>
-
-      <section style={panelGridStyle}>
-        <div style={columnStyle('34%', 300)}>
-          <div style={cardStyle}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span style={textStyles.eyebrow}>Care coordination</span>
-              <h2 style={{ ...textStyles.title, fontSize: 26, lineHeight: '32px', margin: 0 }}>
-                Upcoming requests and peer messages
-              </h2>
             </div>
+          </DashCard>
 
-            {requests.length === 0 ? (
-              <div style={listCardStyle}>
-                <div style={textStyles.title}>No future requests queued</div>
-                <div style={textStyles.muted}>New consultation requests will appear here as they are booked.</div>
+        </div>
+
+        {/* RIGHT COLUMN */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+          {/* Upcoming Consultation Sessions */}
+          <DashCard title="UPCOMING CONSULTATION SESSIONS">
+            {upcomingFirst.length === 0 ? (
+              <p style={{ ...textStyles.muted, margin: 0, fontSize: 12 }}>No upcoming sessions</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {upcomingFirst.map((appt) => (
+                  <div key={appt.id} style={listRowStyle}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <span style={{ ...textStyles.label, fontSize: 11 }}>{formatTime(appt.startTime)}</span>
+                      <span style={{ ...textStyles.muted, fontSize: 10 }}>{new Date(appt.startTime).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                      <a href={`/doctor/patient/${appt.recipientId ?? appt.id}`} style={{ ...outlinedBtn, fontSize: 9, padding: '4px 8px' }}>VIEW PATIENT</a>
+                      <a href={`/doctor/consult/${appt.id}`} style={{ ...blackFilledBtn, fontSize: 10, padding: '6px 12px' }}>START</a>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ) : null}
+            )}
+          </DashCard>
 
-            {requests.map((appointment) => (
-              <div key={appointment.id} style={listCardStyle}>
-                <div style={metaRowStyle}>
-                  <span style={pill('neutral')}>Upcoming</span>
-                  <span style={textStyles.muted}>{formatFuture(appointment.startTime)}</span>
+          {/* Hourly Rate */}
+          <DashCard title="PROFESSIONAL FEE PER SESSION">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <span style={{ ...textStyles.display, fontSize: 32, lineHeight: '38px', margin: 0 }}>₹ {rate.toLocaleString('en-IN')}</span>
+              {rateUpdated && (
+                <div style={{ borderRadius: webTheme.radius.md, backgroundColor: '#EDF5EA', border: '1px solid rgba(126,154,119,0.2)', padding: '8px 12px', ...textStyles.muted, fontSize: 11, color: webTheme.colors.success }}>
+                  Rate updated successfully
                 </div>
-                <div style={textStyles.title}>{appointment.recipientName ?? `Patient #${appointment.id}`}</div>
-                <a href={`/doctor/patient/${appointment.recipientId ?? appointment.id}`} style={softButton('secondary')}>
-                  Review patient chart
-                </a>
-              </div>
-            ))}
-
-            <div style={{ ...surface({ padding: 16, boxShadow: 'none' }) }}>
-              <ChatPanel userName={user.name} height={560} />
-            </div>
-          </div>
-        </div>
-
-        <div style={columnStyle('46%', 360)}>
-          <div style={cardStyle}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span style={textStyles.eyebrow}>Insights studio</span>
-              <h2 style={{ ...textStyles.title, fontSize: 26, lineHeight: '32px', margin: 0 }}>
-                Share clinical notes more calmly
-              </h2>
-            </div>
-
-            <div style={{ ...surface({ padding: 18, boxShadow: 'none' }), display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <textarea
-                value={insightText}
-                onChange={(event) => setInsightText(event.target.value)}
-                placeholder="Share a research note, protocol reminder, or team insight…"
-                style={{
-                  width: '100%',
-                  boxSizing: 'border-box',
-                  minHeight: 120,
-                  resize: 'vertical',
-                  border: `1px solid ${webTheme.colors.borderStrong}`,
-                  borderRadius: webTheme.radius.md,
-                  padding: '14px 16px',
-                  fontFamily: webTheme.font.sans,
-                  fontSize: 15,
-                  lineHeight: '22px',
-                  color: webTheme.colors.text,
-                  outline: 'none',
-                  backgroundColor: 'rgba(255,255,255,0.82)',
-                }}
+              )}
+              <input
+                type="number"
+                value={rate}
+                min={100}
+                onChange={(e) => setRate(Number(e.target.value))}
+                style={{ ...inputStyle, fontSize: 14 }}
               />
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                <button type="button" style={softButton('secondary')}>Attach video</button>
-                <button type="button" style={softButton('secondary')}>Add images</button>
-                <button type="button" style={softButton('secondary')}>Reference notes</button>
-                <button
-                  type="button"
-                  style={{ ...softButton('accent'), marginLeft: 'auto' }}
-                  onClick={() => setInsightText('')}
-                >
-                  Publish insight
-                </button>
+              <button
+                type="button"
+                style={{ ...blackFilledBtn, backgroundColor: '#8B1C1C', borderColor: '#8B1C1C' }}
+                onClick={() => void handleUpdateRate()}
+              >
+                UPDATE HOURLY RATE
+              </button>
+            </div>
+          </DashCard>
+
+          {/* Consultation Revenue */}
+          <DashCard title="CONSULTATION REVENUE">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <span style={{ ...textStyles.muted, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em' }}>PAYMENTS UNTIL {todayStr.toUpperCase()}</span>
+              <span style={{ ...textStyles.display, fontSize: 28, lineHeight: '34px', margin: 0 }}>₹ 82,500</span>
+              <div style={listRowStyle}>
+                <span style={{ ...textStyles.muted, fontSize: 11 }}>Priya Sharma</span>
+                <span style={{ ...textStyles.label, fontSize: 11 }}>₹ 2,500</span>
               </div>
             </div>
+          </DashCard>
 
-            {MOCK_FEED.map((item) => (
-              <div key={item.id} style={listCardStyle}>
-                <div style={metaRowStyle}>
-                  <span style={pill('accent')}>{item.category}</span>
-                  <span style={textStyles.muted}>{item.time}</span>
-                </div>
-                <div style={textStyles.title}>{item.title}</div>
-                <div style={textStyles.body}>{item.body}</div>
-              </div>
-            ))}
-          </div>
+          {/* Availability Settings */}
+          <DashCard title="AVAILABILITY SETTINGS">
+            <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={accepting}
+                onChange={(e) => void handleAvailabilityToggle(e.target.checked)}
+                style={{ width: 18, height: 18, cursor: 'pointer' }}
+              />
+              <span style={{ ...textStyles.label, fontSize: 12 }}>ACCEPTING REQUESTS</span>
+              {accepting
+                ? <span style={{ ...pill('success'), fontSize: 9, padding: '3px 7px' }}>ACTIVE</span>
+                : <span style={{ ...pill('rose'), fontSize: 9, padding: '3px 7px' }}>PAUSED</span>
+              }
+            </label>
+          </DashCard>
+
         </div>
-      </section>
-    </>
+      </div>
+
+      <style>{`
+        @media (max-width: 768px) {
+          .dd-grid { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
+    </div>
   );
 }

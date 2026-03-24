@@ -110,15 +110,14 @@ public class DailyRoomService {
             sslContext.init(null, tmf.getTrustManagers(), null);
 
             // 5. Wire into Apache HttpClient (used by HttpComponentsClientHttpRequestFactory)
+            org.apache.hc.client5.http.ssl.SSLConnectionSocketFactory sslSocketFactory =
+                    new org.apache.hc.client5.http.ssl.SSLConnectionSocketFactory(sslContext);
+
             org.apache.hc.client5.http.impl.classic.CloseableHttpClient httpClient =
                     org.apache.hc.client5.http.impl.classic.HttpClients.custom()
                             .setConnectionManager(
                                     org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder.create()
-                                            .setSSLSocketFactory(
-                                                    org.apache.hc.client5.http.ssl.SSLConnectionSocketFactory.builder()
-                                                            .setSslContext(sslContext)
-                                                            .build()
-                                            )
+                                            .setSSLSocketFactory(sslSocketFactory)
                                             .build()
                             )
                             .build();

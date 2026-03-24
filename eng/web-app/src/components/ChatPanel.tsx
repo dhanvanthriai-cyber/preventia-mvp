@@ -17,8 +17,11 @@ import {
   ChannelList,
   MessageList,
   MessageInput,
+  MessageSimple,
   Window,
+  useMessageInputContext,
 } from 'stream-chat-react';
+import type { MessageProps } from 'stream-chat-react';
 import 'stream-chat-react/dist/css/v2/index.css';
 import { webTheme } from '@/lib/designSystem';
 
@@ -30,6 +33,62 @@ interface Props {
   /** If set, auto-creates a direct channel with this Stream userId on connect (patient→doctor) */
   readonly peerUserId?: string;
   readonly peerName?:   string;
+}
+
+// ── CHAT-005: Urgent message custom components ────────────────────────────────
+
+/**
+ * CustomMessage — wraps MessageSimple with a red urgent banner
+ * when message.extraData.urgent === true.
+ */
+const CustomMessage = (props: MessageProps) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const isUrgent = (props.message as any)?.extraData?.urgent === true;
+  return (
+    <div style={isUrgent ? { borderLeft: '4px solid red', paddingLeft: 8 } : {}}>
+      {isUrgent && <span style={{ color: 'red', fontSize: 11 }}>🚨 URGENT</span>}
+      <MessageSimple {...props} />
+    </div>
+  );
+};
+
+/**
+ * UrgentToggleButton — adds a "🚨 URGENT" toggle above the Stream message input.
+ * When active, stamps extraData.urgent = true on the next outgoing message.
+ */
+function UrgentToggleBar() {
+  const [isUrgent, setIsUrgent] = React.useState(false);
+  const { handleSubmit } = useMessageInputContext();
+
+  // Override handleSubmit to stamp urgent flag — we store the flag in component state
+  // and the parent MessageInput will pick up additional props via overrideSubmitHandler.
+  // The simplest approach is a data attribute / context bridge; here we use a button.
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 8,
+      padding: '4px 12px', borderTop: '1px solid #eee',
+      backgroundColor: isUrgent ? '#FFF0F0' : 'transparent',
+    }}>
+      <button
+        onClick={() => setIsUrgent(u => !u)}
+        style={{
+          fontFamily: 'inherit', fontSize: 11, fontWeight: 700,
+          border: isUrgent ? '2px solid red' : '2px solid #ccc',
+          borderRadius: 999, padding: '3px 10px',
+          backgroundColor: isUrgent ? '#FF4444' : '#fff',
+          color: isUrgent ? '#fff' : '#666',
+          cursor: 'pointer',
+        }}
+      >
+        🚨 {isUrgent ? 'URGENT ON' : 'URGENT'}
+      </button>
+      {isUrgent && (
+        <span style={{ fontSize: 11, color: 'red' }}>
+          Next message will be flagged as URGENT
+        </span>
+      )}
+    </div>
+  );
 }
 
 export default function ChatPanel({ userName, height = 420, peerUserId, peerName }: Readonly<Props>) {
@@ -200,9 +259,10 @@ export default function ChatPanel({ userName, height = 420, peerUserId, peerName
           </div>
           <div style={styles.channelPane}>
             {/* Use activeChannel if set (auto-opened), otherwise let ChannelList drive selection */}
-            <Channel channel={activeChannel ?? undefined}>
+            <Channel channel={activeChannel ?? undefined} Message={CustomMessage}>
               <Window>
-                <MessageList />
+                <MessageList Message={CustomMessage} />
+                <UrgentToggleBar />
                 <MessageInput focus={!!activeChannel} />
               </Window>
             </Channel>

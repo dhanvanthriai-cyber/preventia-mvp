@@ -175,9 +175,20 @@ export default function ChatPanel({ userName, height = 420, peerUserId, peerName
         if (!cancelled) {
           setStreamUserId(data.userId);
           setReady(true);
-          // Patient side: auto-open the channel with the doctor immediately
           if (peerUserId) {
+            // Patient side: auto-open the channel with the doctor immediately
             await openOrCreateChannel(client, data.userId, peerUserId, peerName);
+          } else if (embedded) {
+            // Embedded mode (doctor dashboard): no ChannelList sidebar, so
+            // auto-select the most recent channel so history shows immediately.
+            const recent = await client.queryChannels(
+              { type: 'messaging', members: { $in: [data.userId] } },
+              { last_message_at: -1 },
+              { limit: 1, watch: true, state: true },
+            );
+            if (!cancelled && recent.length > 0) {
+              setActiveChannel(recent[0]);
+            }
           }
         }
       } catch (e) {
@@ -192,7 +203,7 @@ export default function ChatPanel({ userName, height = 420, peerUserId, peerName
       clientRef.current?.disconnectUser().catch(() => {});
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userName, peerUserId, peerName]);
+  }, [userName, peerUserId, peerName, embedded]);
 
   // ── Doctor-side: start a new conversation by Stream userId ──────────────
   const handleStartConversation = useCallback(async () => {
@@ -277,17 +288,21 @@ export default function ChatPanel({ userName, height = 420, peerUserId, peerName
 
         {embedded ? (
           /* ── Embedded mode: single-pane, no channel list sidebar ── */
-          <div style={{ height, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <Channel channel={activeChannel ?? undefined} Message={CustomMessage}>
-              <Window>
-                <MessageList
-                  Message={CustomMessage}
-                  disableDateSeparator={false}
-                />
-                <MessageInput focus={!!activeChannel} />
-              </Window>
-            </Channel>
-          </div>
+          <>
+            {/* Sync programmatically-opened channels into Stream state (compose / peer-open / history auto-load) */}
+            <ChannelSyncer channel={activeChannel} />
+            <div style={{ height, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <Channel Message={CustomMessage}>
+                <Window>
+                  <MessageList
+                    Message={CustomMessage}
+                    disableDateSeparator={false}
+                  />
+                  <MessageInput />
+                </Window>
+              </Channel>
+            </div>
+          </>
         ) : (
           /* ── Full two-pane layout ── */
           <>

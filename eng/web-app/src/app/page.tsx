@@ -60,6 +60,7 @@ export default function HomePage({
 
   const mode = searchParams?.mode === 'login' ? 'login' : 'register';
   const roleParam = searchParams?.role;
+  // ADMIN is not a valid role for the main portal; redirect via /login?role=ADMIN → /admin/login
   const initialRole =
     roleParam === 'DOCTOR' || roleParam === 'PHARMACIST' || roleParam === 'RECIPIENT'
       ? roleParam

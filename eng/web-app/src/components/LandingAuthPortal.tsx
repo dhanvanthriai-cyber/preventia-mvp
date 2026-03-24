@@ -87,7 +87,6 @@ const ROLE_OPTIONS: { role: PortalRole; label: string }[] = [
   { role: 'RECIPIENT', label: 'Patient' },
   { role: 'DOCTOR', label: 'Doctor' },
   { role: 'PHARMACIST', label: 'Pharmacist' },
-  { role: 'ADMIN', label: 'Admin' },
 ];
 
 const pageStyle: React.CSSProperties = {
@@ -166,7 +165,7 @@ const labelStyle: React.CSSProperties = {
 
 const roleGridStyle: React.CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+  gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
   border: '1.5px solid #111111',
 };
 
@@ -540,13 +539,7 @@ export default function LandingAuthPortal({
             </div>
           </div>
 
-          {mode === 'register' && selectedRole === 'ADMIN' && (
-            <p style={{ ...labelStyle, color: '#7A746D', textAlign: 'center' }}>
-              Admin accounts are provisioned internally. Please sign in instead.
-            </p>
-          )}
-
-          {mode === 'register' && selectedRole !== 'ADMIN' && (
+          {mode === 'register' && (
             <div style={fieldGridStyle}>
               <div style={fieldStackStyle}>
                 <label htmlFor="firstName" style={labelStyle}>First Name</label>

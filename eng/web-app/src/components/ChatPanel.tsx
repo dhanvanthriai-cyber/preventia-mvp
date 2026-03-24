@@ -28,11 +28,13 @@ import { webTheme } from '@/lib/designSystem';
 interface ChatTokenResponse { token: string; userId: string; apiKey: string; }
 
 interface Props {
-  readonly userName?:   string;
-  readonly height?:     number;   // px, default 420
+  readonly userName?:      string;
+  readonly height?:        number;   // px, default 420
   /** If set, auto-creates a direct channel with this Stream userId on connect (patient→doctor) */
-  readonly peerUserId?: string;
-  readonly peerName?:   string;
+  readonly peerUserId?:    string;
+  readonly peerName?:      string;
+  /** CONSULT-010: If set, renders the EmergencyButton in the chat panel header */
+  readonly appointmentId?: number;
 }
 
 // ── CHAT-005: Urgent message custom components ────────────────────────────────
@@ -91,7 +93,10 @@ function UrgentToggleBar() {
   );
 }
 
-export default function ChatPanel({ userName, height = 420, peerUserId, peerName }: Readonly<Props>) {
+// Lazy-load EmergencyButton to avoid SSR issues
+const EmergencyButtonLazy = React.lazy(() => import('./EmergencyButton'));
+
+export default function ChatPanel({ userName, height = 420, peerUserId, peerName, appointmentId }: Readonly<Props>) {
   const clientRef             = useRef<StreamChat | null>(null);
   const [streamUserId,   setStreamUserId]   = useState<string | null>(null);
   const [activeChannel,  setActiveChannel]  = useState<StreamChannel | null>(null);
@@ -201,6 +206,15 @@ export default function ChatPanel({ userName, height = 420, peerUserId, peerName
 
   return (
     <div className="dhv-chat-root" style={{ ...styles.chatRoot, minHeight: height }}>
+      {/* CONSULT-010: Emergency button in chat panel header */}
+      {appointmentId != null && (
+        <div style={styles.emergencyBar}>
+          <React.Suspense fallback={null}>
+            <EmergencyButtonLazy appointmentId={appointmentId} />
+          </React.Suspense>
+        </div>
+      )}
+
       <Chat client={clientRef.current} theme="str-chat__theme-light">
 
         {/* Doctor-side: NEW MESSAGE compose bar */}
@@ -392,6 +406,13 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: 'hidden',
     fontFamily: webTheme.font.sans,
     backgroundColor: webTheme.colors.surface,
+  },
+  emergencyBar: {
+    padding: '8px 12px',
+    borderBottom: `1px solid ${webTheme.colors.border}`,
+    backgroundColor: '#FFF0F0',
+    display: 'flex',
+    justifyContent: 'flex-end',
   },
   chatLayout:      { display: 'flex', overflow: 'hidden' },
   channelListPane: { width: 248, borderRight: `1px solid ${webTheme.colors.border}`, overflowY: 'auto', flexShrink: 0, backgroundColor: webTheme.colors.surface },

@@ -50,7 +50,7 @@ const plaqueStyle: React.CSSProperties = {
 
 const titleStyle: React.CSSProperties = {
   margin: 0,
-  fontSize: 'clamp(28px, 6vw, 40px)',
+  fontSize: 'clamp(28px, 6vw, 42px)',
   lineHeight: '0.92',
   fontWeight: 900,
   letterSpacing: '-0.05em',
@@ -123,20 +123,6 @@ const submitStyle: React.CSSProperties = {
   cursor: 'pointer',
 };
 
-const badgeStyle: React.CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 6,
-  border: '1.5px solid #111111',
-  padding: '4px 10px',
-  fontSize: 9,
-  fontWeight: 800,
-  letterSpacing: '0.14em',
-  textTransform: 'uppercase',
-  color: '#111111',
-  backgroundColor: '#FFF8F0',
-};
-
 const footerStyle: React.CSSProperties = {
   margin: 0,
   fontSize: 9,
@@ -146,6 +132,19 @@ const footerStyle: React.CSSProperties = {
   textTransform: 'uppercase',
   textAlign: 'center',
   color: '#A39A90',
+};
+
+const badgeStyle: React.CSSProperties = {
+  display: 'inline-block',
+  border: '1.5px solid #111111',
+  backgroundColor: '#F7F2EA',
+  padding: '4px 10px',
+  fontSize: 9,
+  fontWeight: 800,
+  letterSpacing: '0.16em',
+  textTransform: 'uppercase',
+  color: '#111111',
+  alignSelf: 'center',
 };
 
 export default function AdminLoginPortal({ nextPath, loggedOut = false }: AdminLoginPortalProps) {
@@ -175,7 +174,7 @@ export default function AdminLoginPortal({ nextPath, loggedOut = false }: AdminL
 
       if (!response.ok) {
         const text = await response.text();
-        setError(text || 'Sign-in failed. Check your credentials and try again.');
+        setError(text || 'Sign-in failed. Please check your credentials.');
         return;
       }
 
@@ -189,8 +188,8 @@ export default function AdminLoginPortal({ nextPath, loggedOut = false }: AdminL
       }
 
       setTokenCookie(data.accessToken, data.expiresInSeconds ?? 86400);
-      const safeNext = nextPath && nextPath.startsWith('/') ? nextPath : '/admin';
-      router.push(safeNext);
+      const safeNext = nextPath && nextPath.startsWith('/') ? nextPath : null;
+      router.push(safeNext ?? '/admin');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Network error. Please try again.');
     } finally {
@@ -202,15 +201,12 @@ export default function AdminLoginPortal({ nextPath, loggedOut = false }: AdminL
     <div style={pageStyle}>
       <div style={wrapperStyle}>
         <div style={plaqueStyle}>Preventia</div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-          <div style={badgeStyle}>
-            <span>⬡</span>
-            <span>Admin Access</span>
-          </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <h1 style={titleStyle}>Admin Sign In</h1>
-          <p style={subtitleStyle}>Restricted to authorized personnel only</p>
+          <p style={subtitleStyle}>Internal access only</p>
         </div>
+
+        <span style={badgeStyle}>Admin Portal</span>
 
         <form style={cardStyle} onSubmit={handleSubmit}>
           <div style={fieldStackStyle}>
@@ -246,7 +242,7 @@ export default function AdminLoginPortal({ nextPath, loggedOut = false }: AdminL
               style={{
                 border: '1.5px solid #111111',
                 backgroundColor: '#FFF0EC',
-                padding: '12px 12px',
+                padding: '12px',
                 fontSize: 12,
                 lineHeight: '18px',
                 color: '#111111',
@@ -261,7 +257,7 @@ export default function AdminLoginPortal({ nextPath, loggedOut = false }: AdminL
               style={{
                 border: '1.5px solid #111111',
                 backgroundColor: '#EFF6E8',
-                padding: '12px 12px',
+                padding: '12px',
                 fontSize: 12,
                 lineHeight: '18px',
                 color: '#111111',
@@ -278,9 +274,25 @@ export default function AdminLoginPortal({ nextPath, loggedOut = false }: AdminL
           >
             {loading ? 'Signing In...' : 'Sign In'}
           </button>
+
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <a
+              href="/"
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                color: '#7A746D',
+                textDecoration: 'underline',
+              }}
+            >
+              ← Patient / Provider login
+            </a>
+          </div>
         </form>
 
-        <p style={footerStyle}>Preventia security protocol v1.2 • Admin portal</p>
+        <p style={footerStyle}>Preventia security protocol v1.2 • End-to-end encrypted</p>
       </div>
     </div>
   );

@@ -136,13 +136,52 @@ public class AppointmentService {
 
     /**
      * Mark an appointment ACTIVE — called when the Daily.co room goes live.
-     * This opens EMR write-access for SOAP notes.
+     * VIDEO-002: If the appointment has a sponsor, fetch their token and send the join link
+     * to the sponsor-doctor channel.
      */
     public AppointmentResponse activateAppointment(Long appointmentId) {
         Appointment appointment = findOrThrow(appointmentId);
         appointment.setStatus(AppointmentStatus.ACTIVE);
+
+        // VIDEO-002: Send sponsor observer join link when consultation goes ACTIVE
+        if (appointment.getSponsorId() != null) {
+            try {
+                String patientName = userRepository.findById(appointment.getRecipientId())
+                    .map(User::getName).orElse("the patient");
+                String doctorName = userRepository.findById(appointment.getDoctorId())
+                    .map(User::getName).orElse("the doctor");
+                String sponsorName = userRepository.findById(appointment.getSponsorId())
+                    .map(User::getName).orElse("Sponsor");
+
+                // Re-issue tokens to get the sponsor token
+                DailyRoomProvisionResult tokens = dailyRoomService.issueTokens(
+                    appointment.getDailyRoomName(),
+                    appointment.getEndTime(),
+                    appointment.getDoctorId(),    doctorName,
+                    appointment.getRecipientId(), patientName,
+                    appointment.getSponsorId(),   sponsorName
+                );
+
+                chatNotificationService.sendSponsorJoinLink(
+                    appointment.getId(),
+                    appointment.getSponsorId(),
+                    appointment.getDoctorId(),
+                    patientName,
+                    doctorName,
+                    appointment.getDailyRoomUrl(),
+                    tokens.sponsorToken()
+                );
+            } catch (Exception e) {
+                log.warn("[AppointmentService] Failed to send sponsor join link for appt {}: {}",
+                    appointmentId, e.getMessage());
+            }
+        }
+
         return toResponse(appointment, null);
     }
+
+    private static final org.slf4j.Logger log =
+        org.slf4j.LoggerFactory.getLogger(AppointmentService.class);
 
     /**
      * Mark an appointment COMPLETED — called when the session ends normally.

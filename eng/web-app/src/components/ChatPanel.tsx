@@ -20,6 +20,7 @@ import {
   MessageSimple,
   Window,
   useMessageInputContext,
+  useChatContext,
 } from 'stream-chat-react';
 import type { MessageProps } from 'stream-chat-react';
 import 'stream-chat-react/dist/css/v2/index.css';
@@ -101,6 +102,20 @@ function UrgentToggleBar() {
 
 // Lazy-load EmergencyButton to avoid SSR issues
 const EmergencyButtonLazy = React.lazy(() => import('./EmergencyButton'));
+
+/**
+ * ChannelSyncer — lives inside <Chat> so it can call useChatContext.
+ * When the parent opens/creates a channel programmatically (compose or peer-open),
+ * it passes that channel here and we push it into Stream's active-channel state.
+ * Normal sidebar clicks are handled entirely by Stream and don't need this.
+ */
+function ChannelSyncer({ channel }: { channel: StreamChannel | null }) {
+  const { setActiveChannel } = useChatContext();
+  useEffect(() => {
+    if (channel) setActiveChannel(channel);
+  }, [channel, setActiveChannel]);
+  return null;
+}
 
 export default function ChatPanel({ userName, height = 420, peerUserId, peerName, appointmentId, embedded = false }: Readonly<Props>) {
   const clientRef             = useRef<StreamChat | null>(null);
@@ -275,33 +290,37 @@ export default function ChatPanel({ userName, height = 420, peerUserId, peerName
           </div>
         ) : (
           /* ── Full two-pane layout ── */
-          <div style={{ ...styles.chatLayout, height: height - (peerUserId ? 0 : composing ? 130 : 42) }}>
-            <div style={styles.channelListPane}>
-              <ChannelList
-                filters={filters}
-                sort={sort}
-                customActiveChannel={activeChannel?.id}
-                EmptyStateIndicator={() => (
-                  <div style={styles.emptyChannels}>
-                    <span style={styles.emptyIcon}>💬</span>
-                    <p style={styles.emptyText}>No messages yet.</p>
-                    {!peerUserId && (
-                      <p style={styles.emptyHint}>Click <strong>+ NEW MESSAGE</strong> above to start a conversation.</p>
-                    )}
-                  </div>
-                )}
-              />
+          <>
+            {/* Sync programmatically-opened channels (compose / peer-open) into Stream state */}
+            <ChannelSyncer channel={activeChannel} />
+            <div style={{ ...styles.chatLayout, height: height - (peerUserId ? 0 : composing ? 130 : 42) }}>
+              <div style={styles.channelListPane}>
+                <ChannelList
+                  filters={filters}
+                  sort={sort}
+                  EmptyStateIndicator={() => (
+                    <div style={styles.emptyChannels}>
+                      <span style={styles.emptyIcon}>💬</span>
+                      <p style={styles.emptyText}>No messages yet.</p>
+                      {!peerUserId && (
+                        <p style={styles.emptyHint}>Click <strong>+ NEW MESSAGE</strong> above to start a conversation.</p>
+                      )}
+                    </div>
+                  )}
+                />
+              </div>
+              <div style={styles.channelPane}>
+                {/* No channel prop — Stream drives the active channel from list clicks */}
+                <Channel Message={CustomMessage}>
+                  <Window>
+                    <MessageList Message={CustomMessage} />
+                    <UrgentToggleBar />
+                    <MessageInput />
+                  </Window>
+                </Channel>
+              </div>
             </div>
-            <div style={styles.channelPane}>
-              <Channel channel={activeChannel ?? undefined} Message={CustomMessage}>
-                <Window>
-                  <MessageList Message={CustomMessage} />
-                  <UrgentToggleBar />
-                  <MessageInput focus={!!activeChannel} />
-                </Window>
-              </Channel>
-            </div>
-          </div>
+          </>
         )}
       </Chat>
       <style>{STREAM_OVERRIDES}</style>

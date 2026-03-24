@@ -3,8 +3,11 @@ package com.preventia.appointment.repository;
 import com.preventia.appointment.domain.Appointment;
 import com.preventia.appointment.domain.AppointmentStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -62,4 +65,22 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
      * Used by ZombieRoomScheduler to detect stale rooms.
      */
     List<Appointment> findByStatusAndEndTimeBefore(AppointmentStatus status, java.time.OffsetDateTime cutoff);
+
+    /**
+     * Appointments whose start_time is between windowStart and windowEnd,
+     * in a non-terminal status — used by the reminder scheduler.
+     */
+    @Query("SELECT a FROM Appointment a WHERE a.startTime BETWEEN :windowStart AND :windowEnd " +
+           "AND a.status NOT IN ('CANCELLED', 'COMPLETED', 'LOCKED')")
+    List<Appointment> findUpcomingInWindow(
+        @Param("windowStart") OffsetDateTime windowStart,
+        @Param("windowEnd") OffsetDateTime windowEnd
+    );
+
+    /**
+     * Appointments with status = SCHEDULED whose start_time is in the past by more than
+     * the given offset — used by NoShowScheduler to find potentially missed appointments.
+     */
+    @Query("SELECT a FROM Appointment a WHERE a.status = 'SCHEDULED' AND a.startTime < :cutoff")
+    List<Appointment> findScheduledStartedBefore(@Param("cutoff") OffsetDateTime cutoff);
 }

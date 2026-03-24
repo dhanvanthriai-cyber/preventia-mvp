@@ -137,13 +137,15 @@ const avatarStyle: React.CSSProperties = {
 interface CardProps {
   title: string;
   children: React.ReactNode;
+  action?: React.ReactNode;
 }
 
-function DashCard({ title, children }: CardProps) {
+function DashCard({ title, children, action }: CardProps) {
   return (
     <div style={cardStyle}>
-      <div style={cardHeaderStyle}>
+      <div style={{ ...cardHeaderStyle, justifyContent: 'space-between' }}>
         <span style={cardTitleStyle}>{title}</span>
+        {action}
       </div>
       {children}
     </div>
@@ -378,22 +380,8 @@ export default function DoctorDashboard({ user }: Readonly<Props>) {
           </DashCard>
 
           {/* In-Network Chat */}
-          <DashCard title="IN-NETWORK CHAT">
-            <div style={{ display: 'flex', gap: 0, height: 360, overflow: 'hidden', borderRadius: webTheme.radius.md, border: `1px solid ${webTheme.colors.border}` }}>
-              {/* Mini contact list */}
-              <div style={{ width: 120, flexShrink: 0, borderRight: `1px solid ${webTheme.colors.border}`, backgroundColor: webTheme.colors.surfaceAlt, display: 'flex', flexDirection: 'column', gap: 0, overflow: 'auto' }}>
-                {['Dr. Singh', 'Dr. Patel', 'Dr. Rao', 'Dr. Mehta'].map((name, i) => (
-                  <div key={name} style={{ padding: '10px 12px', borderBottom: `1px solid ${webTheme.colors.border}`, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                    <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: i < 2 ? '#22C55E' : webTheme.colors.border, flexShrink: 0 }} />
-                    <span style={{ ...textStyles.muted, fontSize: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
-                  </div>
-                ))}
-              </div>
-              {/* Chat panel */}
-              <div style={{ flex: 1, overflow: 'hidden' }}>
-                <ChatPanel userName={doctorName} height={360} />
-              </div>
-            </div>
+          <DashCard title="IN-NETWORK CHAT" action={<a href="/doctor/messages" style={{ ...textStyles.muted, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', textDecoration: 'none', color: webTheme.colors.accentStrong }}>FULL SCREEN ›</a>}>
+            <ChatPanel userName={doctorName} height={380} embedded />
           </DashCard>
 
         </div>
@@ -458,6 +446,11 @@ export default function DoctorDashboard({ user }: Readonly<Props>) {
 
           {/* Upcoming Consultation Sessions */}
           <DashCard title="UPCOMING CONSULTATION SESSIONS">
+            <div style={{ marginBottom: 12 }}>
+              <a href="/doctor/book" style={{ ...blackFilledBtn, fontSize: 11, display: 'inline-block' }}>
+                + BOOK APPOINTMENT
+              </a>
+            </div>
             {upcomingFirst.length === 0 ? (
               <p style={{ ...textStyles.muted, margin: 0, fontSize: 12 }}>No upcoming sessions</p>
             ) : (

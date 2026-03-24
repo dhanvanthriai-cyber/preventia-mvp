@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import type { AuthUser } from '@preventia/shared';
-import { getTokenFromCookie } from '@/lib/auth';
+import { getTokenFromCookie, getUserFromToken } from '@/lib/auth';
 import {
   divider,
   inputStyle,
@@ -91,6 +91,14 @@ export default function PatientBookAppointmentPage({ user }: Readonly<Props>) {
       return;
     }
 
+    // Decode userId from JWT directly as a reliable fallback so booking
+    // never gets stuck with patientId=null if /auth/me is slow.
+    const decoded = getUserFromToken(jwt);
+    if (decoded?.userId) {
+      setPatientId(decoded.userId as unknown as number);
+    }
+    if (decoded?.name) setPatientName(decoded.name);
+
     Promise.all([
       fetch('/api/v1/auth/me', {
         headers: { Authorization: `Bearer ${jwt}` },
@@ -104,6 +112,10 @@ export default function PatientBookAppointmentPage({ user }: Readonly<Props>) {
           const me = await meRes.json() as { userId: number; name?: string };
           setPatientId(me.userId);
           if (me.name) setPatientName(me.name);
+        } else if (meRes.status === 401) {
+          // Token expired — redirect to login
+          window.location.href = '/?mode=login&next=/patient/book';
+          return;
         }
 
         if (!doctorsRes.ok) {
@@ -190,7 +202,8 @@ export default function PatientBookAppointmentPage({ user }: Readonly<Props>) {
       if (!res.ok) {
         const text = await res.text();
         if (res.status === 401) {
-          throw new Error('You are not authorized to book appointments with this session. Sign in again and retry.');
+          window.location.href = '/?mode=login&next=/patient/book';
+          return;
         }
         if (res.status === 403) {
           throw new Error('This account does not have permission to book appointments.');

@@ -35,6 +35,12 @@ interface Props {
   readonly peerName?:      string;
   /** CONSULT-010: If set, renders the EmergencyButton in the chat panel header */
   readonly appointmentId?: number;
+  /**
+   * embedded mode: hides the channel list sidebar and renders a clean single-pane
+   * message view — suitable for dashboard card embeds where space is limited.
+   * Default: false (show full two-pane layout).
+   */
+  readonly embedded?:      boolean;
 }
 
 // ── CHAT-005: Urgent message custom components ────────────────────────────────
@@ -96,7 +102,7 @@ function UrgentToggleBar() {
 // Lazy-load EmergencyButton to avoid SSR issues
 const EmergencyButtonLazy = React.lazy(() => import('./EmergencyButton'));
 
-export default function ChatPanel({ userName, height = 420, peerUserId, peerName, appointmentId }: Readonly<Props>) {
+export default function ChatPanel({ userName, height = 420, peerUserId, peerName, appointmentId, embedded = false }: Readonly<Props>) {
   const clientRef             = useRef<StreamChat | null>(null);
   const [streamUserId,   setStreamUserId]   = useState<string | null>(null);
   const [activeChannel,  setActiveChannel]  = useState<StreamChannel | null>(null);
@@ -254,34 +260,49 @@ export default function ChatPanel({ userName, height = 420, peerUserId, peerName
           </div>
         )}
 
-        <div style={{ ...styles.chatLayout, height: height - (peerUserId ? 0 : composing ? 130 : 42) }}>
-          <div style={styles.channelListPane}>
-            <ChannelList
-              filters={filters}
-              sort={sort}
-              customActiveChannel={activeChannel?.id}
-              EmptyStateIndicator={() => (
-                <div style={styles.emptyChannels}>
-                  <span style={styles.emptyIcon}>💬</span>
-                  <p style={styles.emptyText}>No messages yet.</p>
-                  {!peerUserId && (
-                    <p style={styles.emptyHint}>Click <strong>+ NEW MESSAGE</strong> above to start a conversation.</p>
-                  )}
-                </div>
-              )}
-            />
-          </div>
-          <div style={styles.channelPane}>
-            {/* Use activeChannel if set (auto-opened), otherwise let ChannelList drive selection */}
+        {embedded ? (
+          /* ── Embedded mode: single-pane, no channel list sidebar ── */
+          <div style={{ height, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <Channel channel={activeChannel ?? undefined} Message={CustomMessage}>
               <Window>
-                <MessageList Message={CustomMessage} />
-                <UrgentToggleBar />
+                <MessageList
+                  Message={CustomMessage}
+                  disableDateSeparator={false}
+                />
                 <MessageInput focus={!!activeChannel} />
               </Window>
             </Channel>
           </div>
-        </div>
+        ) : (
+          /* ── Full two-pane layout ── */
+          <div style={{ ...styles.chatLayout, height: height - (peerUserId ? 0 : composing ? 130 : 42) }}>
+            <div style={styles.channelListPane}>
+              <ChannelList
+                filters={filters}
+                sort={sort}
+                customActiveChannel={activeChannel?.id}
+                EmptyStateIndicator={() => (
+                  <div style={styles.emptyChannels}>
+                    <span style={styles.emptyIcon}>💬</span>
+                    <p style={styles.emptyText}>No messages yet.</p>
+                    {!peerUserId && (
+                      <p style={styles.emptyHint}>Click <strong>+ NEW MESSAGE</strong> above to start a conversation.</p>
+                    )}
+                  </div>
+                )}
+              />
+            </div>
+            <div style={styles.channelPane}>
+              <Channel channel={activeChannel ?? undefined} Message={CustomMessage}>
+                <Window>
+                  <MessageList Message={CustomMessage} />
+                  <UrgentToggleBar />
+                  <MessageInput focus={!!activeChannel} />
+                </Window>
+              </Channel>
+            </div>
+          </div>
+        )}
       </Chat>
       <style>{STREAM_OVERRIDES}</style>
     </div>

@@ -448,7 +448,7 @@ export default function PatientDashboard({ user }: Readonly<Props>) {
           <DashCard title="PROVIDER CHAT" linkLabel="FULL SCREEN CHAT ›" linkHref={joinableAppt ? `/patient/consult/${joinableAppt.id}` : '/patient'}>
             <div style={{ height: 260, overflow: 'hidden', borderRadius: webTheme.radius.md }}>
               {chatPeerUserId ? (
-                <ChatPanel userName={patientName} height={260} peerUserId={chatPeerUserId} peerName={chatPeerName} />
+                <ChatPanel userName={patientName} height={280} peerUserId={chatPeerUserId} peerName={chatPeerName} embedded />
               ) : (
                 <div style={{ ...surface({ padding: 16, boxShadow: 'none', backgroundColor: webTheme.colors.surfaceAlt }), height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <span style={{ ...textStyles.muted, fontSize: 12 }}>Loading chat…</span>

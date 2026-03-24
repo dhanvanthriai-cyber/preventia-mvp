@@ -35,6 +35,25 @@ WORKDIR /app
 # Non-root user for security (no login shell, no home dir)
 RUN groupadd -r preventia && useradd -r -g preventia preventia
 
+# ---------------------------------------------------------------------------
+# Trust Amazon's intermediate + root CAs so the JVM can reach api.daily.co.
+# eclipse-temurin ships with a minimal cacerts that may be missing Amazon
+# RSA 2048 M03 (intermediate). Both certs are committed under eng/certs/.
+# ---------------------------------------------------------------------------
+COPY certs/amazon-rsa-2048-m03.pem /tmp/amazon-rsa-2048-m03.pem
+COPY certs/amazon-root-ca-1.pem    /tmp/amazon-root-ca-1.pem
+RUN keytool -importcert -noprompt \
+      -keystore "$JAVA_HOME/lib/security/cacerts" \
+      -storepass changeit \
+      -alias amazon-rsa-2048-m03 \
+      -file /tmp/amazon-rsa-2048-m03.pem && \
+    keytool -importcert -noprompt \
+      -keystore "$JAVA_HOME/lib/security/cacerts" \
+      -storepass changeit \
+      -alias amazon-root-ca-1 \
+      -file /tmp/amazon-root-ca-1.pem && \
+    rm /tmp/amazon-rsa-2048-m03.pem /tmp/amazon-root-ca-1.pem
+
 COPY --from=build /app/target/*.jar app.jar
 RUN chown preventia:preventia app.jar
 

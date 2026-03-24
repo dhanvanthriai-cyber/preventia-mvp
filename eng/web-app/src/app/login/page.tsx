@@ -1,21 +1,6 @@
-/**
- * /login — Preventia portal login page
- *
- * Server component wrapper — LoginForm is the 'use client' leaf.
- * Suspense boundary is required because LoginForm calls useSearchParams().
- */
-import type { Metadata } from 'next';
-import { Suspense } from 'react';
-import LoginForm from './LoginForm';
-
-export const metadata: Metadata = {
-  title: 'Sign In — Preventia Portal',
-};
-
-export default function LoginPage() {
-  return (
-    <Suspense fallback={<div style={{ padding: 32, color: '#6F6A63' }}>Loading…</div>}>
-      <LoginForm />
-    </Suspense>
-  );
+import { redirect } from 'next/navigation';
+export default function LoginRedirect({ searchParams }: { searchParams: Record<string, string> }) {
+  const role = searchParams.role ? `&role=${searchParams.role}` : '';
+  const next = searchParams.next ? `&next=${searchParams.next}` : '';
+  redirect(`/?mode=login${role}${next}`);
 }

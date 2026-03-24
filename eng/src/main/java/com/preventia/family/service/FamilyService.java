@@ -1,5 +1,8 @@
 package com.preventia.family.service;
 
+import com.preventia.appointment.domain.Appointment;
+import com.preventia.appointment.repository.AppointmentRepository;
+import com.preventia.chat.service.ChatNotificationService;
 import com.preventia.family.domain.FamilyRelationship;
 import com.preventia.family.domain.FamilyRelationship.ConsentStatus;
 import com.preventia.family.domain.User;
@@ -7,6 +10,8 @@ import com.preventia.family.dto.FamilyLinkRequest;
 import com.preventia.family.dto.FamilyLinkResponse;
 import com.preventia.family.repository.FamilyRelationshipRepository;
 import com.preventia.auth.repository.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,12 +22,21 @@ import java.util.List;
 @Transactional
 public class FamilyService {
 
+    private static final Logger log = LoggerFactory.getLogger(FamilyService.class);
+
     private final FamilyRelationshipRepository relationshipRepo;
     private final UserRepository userRepo;
+    private final AppointmentRepository appointmentRepo;
+    private final ChatNotificationService chatNotificationService;
 
-    public FamilyService(FamilyRelationshipRepository relationshipRepo, UserRepository userRepo) {
-        this.relationshipRepo = relationshipRepo;
-        this.userRepo = userRepo;
+    public FamilyService(FamilyRelationshipRepository relationshipRepo,
+                         UserRepository userRepo,
+                         AppointmentRepository appointmentRepo,
+                         ChatNotificationService chatNotificationService) {
+        this.relationshipRepo        = relationshipRepo;
+        this.userRepo                = userRepo;
+        this.appointmentRepo         = appointmentRepo;
+        this.chatNotificationService = chatNotificationService;
     }
 
     /**
@@ -45,6 +59,7 @@ public class FamilyService {
 
     /**
      * Recipient grants EMR access to the linked Sponsor.
+     * CHAT-006: Also creates the sponsor-doctor update channel in Stream Chat.
      */
     public FamilyLinkResponse grantConsent(Long relationshipId) {
         FamilyRelationship rel = relationshipRepo.findById(relationshipId)
@@ -52,7 +67,30 @@ public class FamilyService {
 
         rel.setConsentStatus(ConsentStatus.GRANTED);
         rel.setGrantedAt(Instant.now());
-        return toResponse(relationshipRepo.save(rel));
+        FamilyLinkResponse response = toResponse(relationshipRepo.save(rel));
+
+        // CHAT-006: Create sponsor-doctor channel on consent GRANTED
+        // Find the patient's most recent appointment to get the doctor
+        Long sponsorId    = rel.getSponsor().getId();
+        Long recipientId  = rel.getRecipient().getId();
+        String sponsorName = rel.getSponsor().getName();
+        String patientName = rel.getRecipient().getName();
+
+        appointmentRepo.findTopByRecipientIdOrderByStartTimeDesc(recipientId).ifPresent(appt -> {
+            Long doctorId = appt.getDoctorId();
+            userRepo.findById(doctorId).ifPresent(doctor -> {
+                try {
+                    chatNotificationService.createSponsorDoctorChannel(
+                        sponsorId, doctorId, sponsorName, doctor.getName(), patientName
+                    );
+                    log.info("[FamilyService] Sponsor-doctor channel created: sponsor={} doctor={}", sponsorId, doctorId);
+                } catch (Exception e) {
+                    log.warn("[FamilyService] Failed to create sponsor-doctor channel: {}", e.getMessage());
+                }
+            });
+        });
+
+        return response;
     }
 
     /**

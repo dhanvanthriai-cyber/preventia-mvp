@@ -4,13 +4,15 @@ import com.preventia.appointment.domain.Appointment;
 import com.preventia.appointment.repository.AppointmentRepository;
 import com.preventia.auth.repository.UserRepository;
 import com.preventia.chat.dto.ChatTokenResponse;
+import com.preventia.chat.service.ChatNotificationService;
 import com.preventia.chat.service.StreamChatService;
 import com.preventia.family.domain.User;
+import com.preventia.family.repository.FamilyRelationshipRepository;
+import jakarta.persistence.EntityNotFoundException;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.List;
@@ -32,16 +34,22 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/v1/chat")
 public class ChatController {
 
-    private final StreamChatService     streamChatService;
-    private final UserRepository        userRepository;
-    private final AppointmentRepository appointmentRepository;
+    private final StreamChatService            streamChatService;
+    private final UserRepository               userRepository;
+    private final AppointmentRepository        appointmentRepository;
+    private final ChatNotificationService      chatNotificationService;
+    private final FamilyRelationshipRepository familyRelationshipRepository;
 
     public ChatController(StreamChatService streamChatService,
                           UserRepository userRepository,
-                          AppointmentRepository appointmentRepository) {
-        this.streamChatService     = streamChatService;
-        this.userRepository        = userRepository;
-        this.appointmentRepository = appointmentRepository;
+                          AppointmentRepository appointmentRepository,
+                          ChatNotificationService chatNotificationService,
+                          FamilyRelationshipRepository familyRelationshipRepository) {
+        this.streamChatService            = streamChatService;
+        this.userRepository               = userRepository;
+        this.appointmentRepository        = appointmentRepository;
+        this.chatNotificationService      = chatNotificationService;
+        this.familyRelationshipRepository = familyRelationshipRepository;
     }
 
     /**
@@ -111,5 +119,44 @@ public class ChatController {
         }
 
         return ResponseEntity.ok(result);
+    }
+
+    // -------------------------------------------------------------------------
+    // CHAT-006: Post-consultation care summary to sponsor channel
+    // -------------------------------------------------------------------------
+
+    /**
+     * POST /api/v1/chat/send-summary/{appointmentId}
+     *
+     * Doctor posts a care summary after consultation.
+     * Sends to the sponsor-doctor channel as a tagged system message.
+     *
+     * Body: { "summary": "string" }
+     */
+    @PostMapping("/send-summary/{appointmentId}")
+    @PreAuthorize("hasRole('DOCTOR')")
+    public ResponseEntity<Map<String, String>> sendCareSummary(
+            @PathVariable Long appointmentId,
+            @RequestBody Map<String, String> body,
+            Authentication authentication) {
+
+        Appointment appt = appointmentRepository.findById(appointmentId)
+            .orElseThrow(() -> new EntityNotFoundException("Appointment not found: " + appointmentId));
+
+        if (appt.getSponsorId() == null) {
+            return ResponseEntity.ok(Map.of("status", "no_sponsor", "message", "No sponsor linked to this appointment."));
+        }
+
+        String summary = body.getOrDefault("summary", "");
+        if (summary.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "summary must not be blank"));
+        }
+
+        chatNotificationService.sendCareSummaryToSponsor(
+            appt.getSponsorId(), appt.getDoctorId(), appointmentId, summary
+        );
+
+        return ResponseEntity.ok(Map.of("status", "sent", "channelId",
+            "sponsor-" + appt.getSponsorId() + "__doctor-" + appt.getDoctorId()));
     }
 }

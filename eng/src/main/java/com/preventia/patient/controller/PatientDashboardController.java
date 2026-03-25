@@ -217,16 +217,15 @@ public class PatientDashboardController {
             Map<String, Object> entry = new LinkedHashMap<>();
             entry.put("appointmentId", appt.getId());
             entry.put("doctorId", appt.getDoctorId());
-            entry.put("doctorName", null); // no doctorName column on Appointment — resolved client-side or via user lookup
+            entry.put("doctorName", appt.getDoctorName());
+            entry.put("recipientName", appt.getRecipientName());
             entry.put("startTime", appt.getStartTime());
             entry.put("endTime", appt.getEndTime());
             entry.put("status", appt.getStatus());
 
-            // Attach SOAP note if present (keyed by appointmentId)
-            soapNoteRepository.findByPatientIdOrderByCreatedAtDesc(patientId)
-                    .stream()
-                    .filter(note -> appt.getId().equals(note.getAppointmentId()))
-                    .findFirst()
+            // Attach SOAP note if present (targeted lookup by appointmentId — avoids N+1)
+            soapNoteRepository.findByAppointmentId(appt.getId())
+                    .stream().findFirst()
                     .ifPresent(note -> {
                         entry.put("subjective", note.getSubjective());
                         entry.put("objective", note.getObjective());

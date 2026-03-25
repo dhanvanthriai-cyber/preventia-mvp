@@ -40,6 +40,14 @@ public class Appointment {
     @Column(name = "doctor_id", nullable = false)
     private Long doctorId;
 
+    /** Snapshot of the doctor's display name at booking time. */
+    @Column(name = "doctor_name", length = 255)
+    private String doctorName;
+
+    /** Snapshot of the recipient's display name at booking time. */
+    @Column(name = "recipient_name", length = 255)
+    private String recipientName;
+
     /** Scheduled start of the session (timezone-aware). */
     @Column(name = "start_time", nullable = false)
     private OffsetDateTime startTime;
@@ -95,6 +103,8 @@ public class Appointment {
     public Long getRecipientId()              { return recipientId; }
     public Long getSponsorId()                { return sponsorId; }
     public Long getDoctorId()                 { return doctorId; }
+    public String getDoctorName()             { return doctorName; }
+    public String getRecipientName()          { return recipientName; }
     public OffsetDateTime getStartTime()      { return startTime; }
     public OffsetDateTime getEndTime()        { return endTime; }
     public String getDailyRoomUrl()           { return dailyRoomUrl; }
@@ -102,8 +112,10 @@ public class Appointment {
     public AppointmentStatus getStatus()      { return status; }
     public OffsetDateTime getCreatedAt()      { return createdAt; }
 
-    public void setStatus(AppointmentStatus status)       { this.status = status; }
-    public void setSponsorId(Long sponsorId)               { this.sponsorId = sponsorId; }
-    public void setDailyRoomUrl(String dailyRoomUrl)       { this.dailyRoomUrl = dailyRoomUrl; }
-    public void setDailyRoomName(String dailyRoomName)     { this.dailyRoomName = dailyRoomName; }
+    public void setStatus(AppointmentStatus status)           { this.status = status; }
+    public void setSponsorId(Long sponsorId)                   { this.sponsorId = sponsorId; }
+    public void setDailyRoomUrl(String dailyRoomUrl)           { this.dailyRoomUrl = dailyRoomUrl; }
+    public void setDailyRoomName(String dailyRoomName)         { this.dailyRoomName = dailyRoomName; }
+    public void setDoctorName(String doctorName)               { this.doctorName = doctorName; }
+    public void setRecipientName(String recipientName)         { this.recipientName = recipientName; }
 }

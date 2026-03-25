@@ -27,6 +27,10 @@ public record AppointmentResponse(
         AppointmentStatus status,
         OffsetDateTime createdAt,
 
+        // Denormalized name snapshots (populated at booking time; null for pre-V22 rows until backfill)
+        String doctorName,
+        String recipientName,
+
         // Populated on creation only — null for state-transition responses
         String doctorToken,
         String recipientToken,

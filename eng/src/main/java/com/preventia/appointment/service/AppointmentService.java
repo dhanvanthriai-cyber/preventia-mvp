@@ -119,6 +119,9 @@ public class AppointmentService {
         // Step 3: Write the real room URL + name back to the persisted entity
         saved.setDailyRoomUrl(room.roomUrl());
         saved.setDailyRoomName(room.roomName());
+        // Persist name snapshots for historical accuracy (consultation-history view)
+        saved.setDoctorName(request.doctorName());
+        saved.setRecipientName(request.recipientName());
         // @Transactional dirty-check will flush the update automatically
 
         // Step 4: Send appointment confirmation via Stream Chat (best-effort)
@@ -331,6 +334,8 @@ public class AppointmentService {
                 a.getDailyRoomName(),
                 a.getStatus(),
                 a.getCreatedAt(),
+                a.getDoctorName(),
+                a.getRecipientName(),
                 room != null ? room.doctorToken()    : null,
                 room != null ? room.recipientToken() : null,
                 room != null ? room.sponsorToken()   : null

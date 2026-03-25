@@ -10,4 +10,5 @@ import java.util.List;
 public interface SoapNoteRepository extends JpaRepository<SoapNote, Long> {
     List<SoapNote> findByPatientIdOrderByCreatedAtDesc(Long patientId);
     List<SoapNote> findByDoctorIdAndPatientId(Long doctorId, Long patientId);
+    List<SoapNote> findByAppointmentId(Long appointmentId);
 }

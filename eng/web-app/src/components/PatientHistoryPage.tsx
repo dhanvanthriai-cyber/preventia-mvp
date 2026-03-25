@@ -20,7 +20,8 @@ interface PrescriptionFile {
 interface ConsultationEntry {
   appointmentId: number;
   doctorId: number;
-  doctorName?: string;
+  doctorName: string | null;
+  recipientName: string | null;
   startTime: string;
   endTime: string;
   status: string;

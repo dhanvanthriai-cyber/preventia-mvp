@@ -37,4 +37,21 @@ public record PaymentResponse(
         PaymentType paymentType,
         BigDecimal exchangeRateAtCapture,
         OffsetDateTime createdAt
-) {}
+) {
+    /** Factory — maps entity to response with no client secret (read-only view). */
+    public static PaymentResponse from(com.preventia.payment.domain.Payment payment) {
+        return new PaymentResponse(
+                payment.getId(),
+                payment.getGateway(),
+                payment.getGatewayPaymentId(),
+                payment.getGatewayOrderId(),
+                null,          // clientSecret not needed for read-only dashboard view
+                payment.getAmountCents(),
+                payment.getCurrency(),
+                payment.getStatus(),
+                payment.getPaymentType(),
+                payment.getExchangeRateAtCapture(),
+                payment.getCreatedAt()
+        );
+    }
+}

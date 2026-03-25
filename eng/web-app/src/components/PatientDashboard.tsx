@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import type { Appointment, AuthUser } from '@preventia/shared';
 import dynamic from 'next/dynamic';
 import {
@@ -23,42 +23,45 @@ interface Vital {
   status?: 'good' | 'warning' | 'danger';
 }
 
-interface Condition {
-  name: string;
-  tag?: string;
-  tagTone?: 'accent' | 'gold' | 'neutral' | 'rose' | 'success';
-  since?: string;
+// ── Live data types ──────────────────────────────────────────────────────────
+
+interface SoapNoteData {
+  id: number;
+  appointmentId?: number;
+  objective: string;
+  assessment: string;
+  plan: string;
+  createdAt: string;
+  doctorId: number;
 }
 
-interface Prescription {
-  name: string;
-  dosage: string;
-  frequency: string;
-  status: 'ACTIVE' | 'INACTIVE' | 'PENDING';
-  prescribedBy?: string;
-  refillsLeft?: number;
+interface MedicationData {
+  id: number;
+  drugName: string;
+  totalQuantity: number;
+  dailyDosage: number;
+  unitPriceInr?: number;
 }
 
-const MOCK_VITALS: Vital[] = [
-  { label: 'HEART RATE', value: '72', unit: 'bpm', numericValue: 72, maxValue: 120, status: 'good' },
-  { label: 'BLOOD PRESSURE', value: '130/78', unit: 'mmHg', numericValue: 65, maxValue: 100, status: 'warning' },
-  { label: 'TEMPERATURE', value: '98.4', unit: '°F', numericValue: 70, maxValue: 100, status: 'good' },
-  { label: 'SPO2', value: '98', unit: '%', numericValue: 98, maxValue: 100, status: 'good' },
-  { label: 'GLUCOSE', value: '141', unit: 'mg/dL', numericValue: 141, maxValue: 200, status: 'warning' },
-  { label: 'WEIGHT', value: '74.5', unit: 'kg', numericValue: 74, maxValue: 150, status: 'good' },
-];
+interface PaymentData {
+  id: number;
+  status: string;
+  createdAt: string;
+  amountCents?: number;
+  currency?: string;
+  paymentType?: string;
+}
 
-const MOCK_CONDITIONS: Condition[] = [
-  { name: 'Type 2 Diabetes', since: '2021', tag: 'MANAGED', tagTone: 'success' },
-  { name: 'Seasonal Allergies', since: '2018', tag: 'RECURRING', tagTone: 'gold' },
-  { name: 'Hypertension', since: '2020', tag: 'WATCH', tagTone: 'rose' },
-];
+interface PrescriptionFile {
+  index: number;
+  filename: string;
+  url: string;
+}
 
-const MOCK_PRESCRIPTIONS: Prescription[] = [
-  { name: 'Metformin', dosage: '500mg', frequency: 'Twice daily', status: 'ACTIVE', prescribedBy: 'Dr. Arjun Mehta', refillsLeft: 2 },
-  { name: 'Lisinopril', dosage: '10mg', frequency: 'Once daily', status: 'ACTIVE', prescribedBy: 'Dr. Kavitha Rao', refillsLeft: 1 },
-  { name: 'Cetirizine', dosage: '10mg', frequency: 'As needed', status: 'INACTIVE', prescribedBy: 'Dr. Priya Nair', refillsLeft: 0 },
-];
+interface PrescriptionRecord {
+  appointmentId: number;
+  files: PrescriptionFile[];
+}
 
 // Styles
 const shellStyle: React.CSSProperties = {
@@ -221,6 +224,13 @@ export default function PatientDashboard({ user }: Readonly<Props>) {
   const [chatPeerUserId, setChatPeerUserId] = useState<string | null>(null);
   const [chatPeerName, setChatPeerName] = useState<string>('Your Doctor');
 
+  // Live clinical data state
+  const [soapNotes, setSoapNotes] = useState<SoapNoteData[]>([]);
+  const [medications, setMedications] = useState<MedicationData[]>([]);
+  const [payments, setPayments] = useState<PaymentData[]>([]);
+  const [prescriptionRecords, setPrescriptionRecords] = useState<PrescriptionRecord[]>([]);
+  const [clinicalLoading, setClinicalLoading] = useState(true);
+
   const patientName = user?.name ?? 'Patient';
   const nameParts = patientName.split(' ');
   const initials = (nameParts[0]?.[0] ?? '') + (nameParts[1]?.[0] ?? '');
@@ -248,6 +258,26 @@ export default function PatientDashboard({ user }: Readonly<Props>) {
         if (data.peerName) setChatPeerName(data.peerName);
       })
       .catch(() => {});
+  }, [user?.token]);
+
+  // Live clinical data fetch
+  useEffect(() => {
+    if (!user?.token) { setClinicalLoading(false); return; }
+    const headers = { Authorization: `Bearer ${user.token}` };
+    Promise.all([
+      fetch('/api/v1/patients/me/soap-notes', { headers, credentials: 'include' }).then(r => r.ok ? r.json() : []),
+      fetch('/api/v1/patients/me/medications', { headers, credentials: 'include' }).then(r => r.ok ? r.json() : []),
+      fetch('/api/v1/patients/me/payments', { headers, credentials: 'include' }).then(r => r.ok ? r.json() : []),
+      fetch('/api/v1/patients/me/prescription-records', { headers, credentials: 'include' }).then(r => r.ok ? r.json() : []),
+    ])
+      .then(([notes, meds, pays, records]) => {
+        setSoapNotes(notes as SoapNoteData[]);
+        setMedications(meds as MedicationData[]);
+        setPayments(pays as PaymentData[]);
+        setPrescriptionRecords(records as PrescriptionRecord[]);
+      })
+      .catch(() => {})
+      .finally(() => setClinicalLoading(false));
   }, [user?.token]);
 
   const fetchAppointments = useCallback(async (uid: number) => {
@@ -306,7 +336,6 @@ export default function PatientDashboard({ user }: Readonly<Props>) {
   const upcomingSessions = appointments
     .filter((a) => a.status === 'SCHEDULED' || a.status === 'ACTIVE')
     .slice(0, 2);
-  const activePrescriptions = MOCK_PRESCRIPTIONS.filter((p) => p.status === 'ACTIVE');
   const allowedDoctorPeerIds = Array.from(
     new Set(
       appointments
@@ -323,6 +352,27 @@ export default function PatientDashboard({ user }: Readonly<Props>) {
     const m = Math.floor((diff % 3_600_000) / 60_000);
     return h > 0 ? `${h}h ${m}m` : `${m}m`;
   };
+
+  function parseVitalsFromObjective(text: string): Vital[] {
+    if (!text) return [];
+    const patterns: Array<{ label: string; regex: RegExp; unit: string; max: number; statusFn: (pct: number) => Vital['status'] }> = [
+      { label: 'HEART RATE',     regex: /(?:HR|Heart Rate)[:\s]+(\d+)/i,         unit: 'bpm',   max: 120, statusFn: p => p > 85 ? 'danger' : p > 65 ? 'warning' : 'good' },
+      { label: 'BLOOD PRESSURE', regex: /(?:BP|Blood Pressure)[:\s]+([\d\/]+)/i, unit: 'mmHg',  max: 100, statusFn: p => p > 85 ? 'danger' : p > 65 ? 'warning' : 'good' },
+      { label: 'TEMPERATURE',    regex: /(?:Temp|Temperature)[:\s]+([\d.]+)/i,   unit: '°F',    max: 105, statusFn: p => p > 95 ? 'danger' : p > 80 ? 'warning' : 'good' },
+      { label: 'SPO2',           regex: /(?:SpO2|Oxygen)[:\s]+(\d+)/i,           unit: '%',     max: 100, statusFn: p => p < 90 ? 'danger' : p < 95 ? 'warning' : 'good' },
+      { label: 'GLUCOSE',        regex: /(?:Glucose|Blood Sugar)[:\s]+(\d+)/i,   unit: 'mg/dL', max: 200, statusFn: p => p > 90 ? 'warning' : 'good' },
+      { label: 'WEIGHT',         regex: /(?:Weight|Wt)[:\s]+([\d.]+)/i,          unit: 'kg',    max: 150, statusFn: _ => 'good' },
+    ];
+    return patterns
+      .map(p => {
+        const m = text.match(p.regex);
+        if (!m) return null;
+        const num = parseFloat(m[1]);
+        const pct = Math.min(100, (num / p.max) * 100);
+        return { label: p.label, value: m[1], unit: p.unit, numericValue: num, maxValue: p.max, status: p.statusFn(pct) } as Vital;
+      })
+      .filter((v): v is Vital => v !== null);
+  }
 
   return (
     <div style={shellStyle}>
@@ -402,11 +452,17 @@ export default function PatientDashboard({ user }: Readonly<Props>) {
 
           {/* Snapshot of Vitals Card */}
           <DashCard title="SNAPSHOT OF VITALS" linkLabel="DEVICES ›" linkHref="/patient/health">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {MOCK_VITALS.map((vital) => (
-                <VitalSparkBar key={vital.label} vital={vital} />
-              ))}
-            </div>
+            {(() => {
+              const latestNote = soapNotes[0];
+              const vitals = latestNote ? parseVitalsFromObjective(latestNote.objective) : [];
+              if (clinicalLoading) return <p style={{ ...textStyles.muted, margin: 0, fontSize: 12 }}>Loading…</p>;
+              if (vitals.length === 0) return <p style={{ ...textStyles.muted, margin: 0, fontSize: 12 }}>No vitals recorded yet</p>;
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {vitals.map((v) => <VitalSparkBar key={v.label} vital={v} />)}
+                </div>
+              );
+            })()}
           </DashCard>
 
           {/* Health Insights Card */}
@@ -469,20 +525,28 @@ export default function PatientDashboard({ user }: Readonly<Props>) {
 
           {/* Active Prescriptions Card */}
           <DashCard title="ACTIVE PRESCRIPTIONS" linkLabel="PHARMACY ›" linkHref="/patient/pharmacy">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {activePrescriptions.map((rx) => (
-                <div key={rx.name} style={listRowStyle}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <span style={{ ...textStyles.label, fontSize: 12 }}>{rx.name}</span>
-                    <span style={{ ...textStyles.muted, fontSize: 10 }}>{rx.dosage} · {rx.frequency}</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ ...pill('success'), fontSize: 9, padding: '3px 7px' }}>ACTIVE</span>
-                    <button type="button" disabled style={{ ...outlinedBtn, fontSize: 9, padding: '4px 10px', opacity: 0.6 }}>REFILL REQUESTED</button>
-                  </div>
+            {(() => {
+              const activeMeds = medications.map(m => ({ ...m, daysRemaining: Math.floor(m.totalQuantity / Math.max(m.dailyDosage, 1)) }));
+              if (clinicalLoading) return <p style={{ ...textStyles.muted, margin: 0, fontSize: 12 }}>Loading…</p>;
+              if (activeMeds.length === 0) return <p style={{ ...textStyles.muted, margin: 0, fontSize: 12 }}>No active medications</p>;
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {activeMeds.map((m) => {
+                    const tone = m.daysRemaining <= 3 ? 'rose' : m.daysRemaining <= 7 ? 'gold' : 'success';
+                    const label = m.daysRemaining <= 3 ? 'CRITICAL' : m.daysRemaining <= 7 ? 'LOW' : 'ACTIVE';
+                    return (
+                      <div key={m.id} style={listRowStyle}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <span style={{ ...textStyles.label, fontSize: 12 }}>{m.drugName}</span>
+                          <span style={{ ...textStyles.muted, fontSize: 10 }}>{m.dailyDosage} unit/day · {m.daysRemaining}d left</span>
+                        </div>
+                        <span style={{ ...pill(tone), fontSize: 9, padding: '3px 7px' }}>{label}</span>
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
+              );
+            })()}
           </DashCard>
 
         </div>
@@ -492,56 +556,98 @@ export default function PatientDashboard({ user }: Readonly<Props>) {
 
           {/* Medical Billing Card */}
           <DashCard title="MEDICAL BILLING" linkLabel="FINANCIALS ›" linkHref="/patient/billing">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <span style={{ ...textStyles.muted, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em' }}>TOTAL ANNUAL SPEND (YTD)</span>
-                <span style={{ ...textStyles.display, fontSize: 28, lineHeight: '34px', margin: 0 }}>₹ 14,200.00</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={listRowStyle}>
-                  <span style={{ ...textStyles.muted, fontSize: 11 }}>PHARMACY BILL OCT</span>
-                  <span style={{ ...textStyles.label, fontSize: 11 }}>₹ 350.00</span>
+            {(() => {
+              // PaymentStatus values: PENDING, CAPTURED, FAILED, REFUNDED
+              const paidPayments = payments.filter(p => p.status === 'CAPTURED');
+              const ytdCents = paidPayments.reduce((sum, p) => sum + (p.amountCents ?? 0), 0);
+              const fmt = (cents: number, currency?: string) => {
+                if (!currency || currency === 'INR') {
+                  return `₹ ${(cents / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+                }
+                return `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+              };
+              const recent = payments.slice(0, 2);
+              if (clinicalLoading) return <p style={{ ...textStyles.muted, margin: 0, fontSize: 12 }}>Loading…</p>;
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <span style={{ ...textStyles.muted, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em' }}>TOTAL ANNUAL SPEND (YTD)</span>
+                    <span style={{ ...textStyles.display, fontSize: 28, lineHeight: '34px', margin: 0 }}>{paidPayments.length > 0 ? fmt(ytdCents) : '₹ 0.00'}</span>
+                  </div>
+                  {recent.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {recent.map((p) => {
+                        const isPending = p.status !== 'CAPTURED';
+                        return (
+                          <div key={p.id} style={listRowStyle}>
+                            <span style={{ ...textStyles.muted, fontSize: 11 }}>{p.paymentType ?? p.status} #{p.id}</span>
+                            <span style={{ ...textStyles.label, fontSize: 11, color: isPending ? webTheme.colors.rose : undefined }}>
+                              {isPending ? 'Pending' : fmt(p.amountCents ?? 0, p.currency)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p style={{ ...textStyles.muted, margin: 0, fontSize: 12 }}>No billing records</p>
+                  )}
+                  <button type="button" disabled style={{ ...outlinedBtn, opacity: 0.6 }}>REVIEW ALL STATEMENTS</button>
                 </div>
-                <div style={listRowStyle}>
-                  <span style={{ ...textStyles.muted, fontSize: 11 }}>LAB INVOICE #003</span>
-                  <span style={{ ...textStyles.label, fontSize: 11, color: webTheme.colors.rose }}>Pending</span>
-                </div>
-              </div>
-              <button type="button" disabled style={{ ...outlinedBtn, opacity: 0.6 }}>REVIEW ALL STATEMENTS</button>
-            </div>
+              );
+            })()}
           </DashCard>
 
           {/* Vaulted Records Card */}
           <DashCard title="VAULTED RECORDS" linkLabel="VAULT ›" linkHref="/patient/vault">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {[
-                { name: 'ANNUAL PHYSICAL 2023 PDF', href: '#' },
-                { name: 'BLOOD PANEL OCT PDF', href: '#' },
-              ].map((file) => (
-                <div key={file.name} style={listRowStyle}>
-                  <span style={{ ...textStyles.label, fontSize: 11 }}>{file.name}</span>
-                  <a href={file.href} style={{ ...cardLinkStyle, color: webTheme.colors.accentStrong }}>VIEW</a>
+            {(() => {
+              const allFiles = prescriptionRecords.flatMap(r => r.files);
+              if (clinicalLoading) return <p style={{ ...textStyles.muted, margin: 0, fontSize: 12 }}>Loading…</p>;
+              if (allFiles.length === 0) return (
+                <>
+                  <p style={{ ...textStyles.muted, margin: 0, fontSize: 12 }}>No records uploaded yet</p>
+                  <button type="button" disabled style={{ ...outlinedBtn, opacity: 0.6 }}>ADD RECORD</button>
+                </>
+              );
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {allFiles.slice(0, 5).map((f, i) => (
+                    <div key={i} style={listRowStyle}>
+                      <span style={{ ...textStyles.label, fontSize: 11 }}>{f.filename.toUpperCase()}</span>
+                      <a href={f.url} target="_blank" rel="noreferrer" style={{ ...cardLinkStyle, color: webTheme.colors.accentStrong }}>VIEW</a>
+                    </div>
+                  ))}
+                  <button type="button" disabled style={{ ...outlinedBtn, opacity: 0.6 }}>ADD RECORD</button>
                 </div>
-              ))}
-              <button type="button" disabled style={{ ...outlinedBtn, opacity: 0.6 }}>ADD RECORD</button>
-            </div>
+              );
+            })()}
           </DashCard>
 
           {/* Clinical History Card */}
           <DashCard title="CLINICAL HISTORY" linkLabel="FULL HISTORY ›" linkHref="/patient/history">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {MOCK_CONDITIONS.map((cond) => (
-                <div key={cond.name} style={listRowStyle}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <span style={{ ...textStyles.label, fontSize: 12 }}>{cond.name}</span>
-                    {cond.since && <span style={{ ...textStyles.muted, fontSize: 10 }}>Since {cond.since}</span>}
-                  </div>
-                  {cond.tag && (
-                    <span style={{ ...pill(cond.tagTone ?? 'neutral'), fontSize: 9, padding: '3px 7px' }}>{cond.tag}</span>
-                  )}
+            {(() => {
+              if (clinicalLoading) return <p style={{ ...textStyles.muted, margin: 0, fontSize: 12 }}>Loading…</p>;
+              if (soapNotes.length === 0) return <p style={{ ...textStyles.muted, margin: 0, fontSize: 12 }}>No clinical history</p>;
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {soapNotes.slice(0, 3).map((note) => {
+                    const text = note.assessment ?? '';
+                    const lower = text.toLowerCase();
+                    const tone = lower.includes('diabetes') ? 'success' : (lower.includes('hypertension') || lower.includes('htn')) ? 'rose' : 'neutral';
+                    const tag = lower.includes('diabetes') ? 'MANAGED' : (lower.includes('hypertension') || lower.includes('htn')) ? 'WATCH' : 'NOTED';
+                    const dateStr = new Date(note.createdAt).toLocaleDateString('en-IN', { year: 'numeric', month: 'short' });
+                    return (
+                      <div key={note.id} style={listRowStyle}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <span style={{ ...textStyles.label, fontSize: 12 }}>{text.length > 80 ? text.slice(0, 77) + '…' : (text || 'Assessment')}</span>
+                          <span style={{ ...textStyles.muted, fontSize: 10 }}>{dateStr}</span>
+                        </div>
+                        <span style={{ ...pill(tone), fontSize: 9, padding: '3px 7px' }}>{tag}</span>
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
+              );
+            })()}
           </DashCard>
 
         </div>

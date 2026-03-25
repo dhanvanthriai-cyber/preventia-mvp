@@ -23,6 +23,10 @@ public class SoapNote {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** FK to appointments.id — nullable (note may be detached from appointment). */
+    @Column(name = "appointment_id")
+    private Long appointmentId;
+
     @Column(name = "patient_id", nullable = false)
     private Long patientId;
 
@@ -67,6 +71,7 @@ public class SoapNote {
 
     // ── Getters ──────────────────────────────────────────────────────────────
     public Long getId()                  { return id; }
+    public Long getAppointmentId()       { return appointmentId; }
     public Long getPatientId()           { return patientId; }
     public Long getDoctorId()            { return doctorId; }
     public String getSubjective()        { return subjective; }
@@ -79,6 +84,7 @@ public class SoapNote {
     public Instant getCreatedAt()              { return createdAt; }
 
     // ── Setters ──────────────────────────────────────────────────────────────
+    public void setAppointmentId(Long appointmentId)                 { this.appointmentId = appointmentId; }
     public void setPatientId(Long patientId)                         { this.patientId = patientId; }
     public void setDoctorId(Long doctorId)                           { this.doctorId = doctorId; }
     public void setSubjective(String subjective)                     { this.subjective = subjective; }

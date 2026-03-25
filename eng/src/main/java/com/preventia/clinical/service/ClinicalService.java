@@ -127,17 +127,6 @@ public class ClinicalService {
     // -------------------------------------------------------------------------
 
     private SoapNoteResponse toResponse(SoapNote note) {
-        return new SoapNoteResponse(
-                note.getId(),
-                note.getPatientId(),
-                note.getDoctorId(),
-                note.getSubjective(),
-                note.getObjective(),
-                note.getAssessment(),
-                note.getPlan(),
-                note.getSessionToken(),
-                note.getPrescriptionS3Key(),
-                note.getCreatedAt()
-        );
+        return SoapNoteResponse.from(note);
     }
 }

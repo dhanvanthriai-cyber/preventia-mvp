@@ -51,6 +51,7 @@ export function clearToken(): void {
 export interface DecodedToken {
   sub: string;          // email / subject
   role: string;         // DOCTOR | PHARMACIST | SPONSOR | RECIPIENT | ADMIN
+  userId?: number;
   name?: string;
   exp?: number;
   iat?: number;

@@ -2,6 +2,7 @@
 
 import type { CSSProperties, FormEvent } from 'react';
 import { useMemo, useState } from 'react';
+import { getTokenFromCookie, getUserFromToken } from '@/lib/auth';
 import {
   divider,
   inputStyle,
@@ -21,7 +22,6 @@ interface AppointmentResult {
 interface DoctorBookAppointmentPageClientProps {
   readonly doctorId: number;
   readonly doctorName: string;
-  readonly token: string;
 }
 
 function toDateInputValue(date: Date): string {
@@ -70,7 +70,6 @@ function toGoogleCalendarUrl(title: string, details: string, start: Date, end: D
 export default function DoctorBookAppointmentPageClient({
   doctorId,
   doctorName,
-  token,
 }: DoctorBookAppointmentPageClientProps) {
   const now = new Date();
   const [recipientId, setRecipientId] = useState('2');
@@ -101,12 +100,16 @@ export default function DoctorBookAppointmentPageClient({
     event.preventDefault();
     setError(null);
 
+    const token = getTokenFromCookie();
     if (!token) {
       setError('Your session has expired. Sign in again before booking the appointment.');
       return;
     }
 
-    if (!doctorId) {
+    const currentUser = getUserFromToken(token);
+    const activeDoctorId = currentUser?.userId ?? doctorId;
+
+    if (!activeDoctorId) {
       setError('Doctor profile is still loading. Try again in a moment.');
       return;
     }
@@ -130,7 +133,7 @@ export default function DoctorBookAppointmentPageClient({
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          doctorId,
+          doctorId: activeDoctorId,
           doctorName,
           recipientId: Number(recipientId),
           recipientName,
@@ -142,7 +145,8 @@ export default function DoctorBookAppointmentPageClient({
       if (!response.ok) {
         const text = await response.text();
         if (response.status === 401) {
-          throw new Error('You are not authorized to book appointments with this session. Sign in again and retry.');
+          window.location.href = '/login?next=/doctor/book';
+          return;
         }
         if (response.status === 403) {
           throw new Error('This account does not have permission to book appointments.');

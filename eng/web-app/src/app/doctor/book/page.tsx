@@ -8,7 +8,6 @@ export default function BookAppointmentPage() {
     <DoctorBookAppointmentPageClient
       doctorId={session.userId}
       doctorName={session.name}
-      token={session.token}
     />
   );
 }

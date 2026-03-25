@@ -307,6 +307,14 @@ export default function PatientDashboard({ user }: Readonly<Props>) {
     .filter((a) => a.status === 'SCHEDULED' || a.status === 'ACTIVE')
     .slice(0, 2);
   const activePrescriptions = MOCK_PRESCRIPTIONS.filter((p) => p.status === 'ACTIVE');
+  const allowedDoctorPeerIds = Array.from(
+    new Set(
+      appointments
+        .map((appointment) => appointment.doctorId)
+        .filter((doctorId): doctorId is number => typeof doctorId === 'number')
+        .map(String),
+    ),
+  );
 
   const timeUntil = (iso: string): string => {
     const diff = new Date(iso).getTime() - Date.now();
@@ -445,15 +453,17 @@ export default function PatientDashboard({ user }: Readonly<Props>) {
           </DashCard>
 
           {/* Provider Chat Card */}
-          <DashCard title="PROVIDER CHAT" linkLabel="FULL SCREEN CHAT ›" linkHref={chatPeerUserId ? `/patient/messages?peer=${chatPeerUserId}&peerName=${encodeURIComponent(chatPeerName)}` : '/patient/messages'}>
+          <DashCard title="PROVIDER CHAT" linkLabel="FULL SCREEN CHAT ›" linkHref="/patient/messages">
             <div style={{ height: 260, overflow: 'hidden', borderRadius: webTheme.radius.md }}>
-              {chatPeerUserId ? (
-                <ChatPanel userName={patientName} height={280} peerUserId={chatPeerUserId} peerName={chatPeerName} embedded />
-              ) : (
-                <div style={{ ...surface({ padding: 16, boxShadow: 'none', backgroundColor: webTheme.colors.surfaceAlt }), height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <span style={{ ...textStyles.muted, fontSize: 12 }}>Loading chat…</span>
-                </div>
-              )}
+              <ChatPanel
+                userName={patientName}
+                height={280}
+                peerUserId={chatPeerUserId ?? undefined}
+                peerName={chatPeerName ?? undefined}
+                embedded
+                queueFirst
+                allowedPeerIds={allowedDoctorPeerIds}
+              />
             </div>
           </DashCard>
 

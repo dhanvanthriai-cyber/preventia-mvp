@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import type { Appointment, AuthUser } from '@preventia/shared';
 import { getAppointments } from '@preventia/shared';
 import dynamic from 'next/dynamic';
@@ -134,6 +135,8 @@ const avatarStyle: React.CSSProperties = {
   flexShrink: 0,
 };
 
+const AUTO_JOIN_WINDOW_MS = 5 * 60 * 1000;
+
 interface CardProps {
   title: string;
   children: React.ReactNode;
@@ -153,6 +156,7 @@ function DashCard({ title, children, action }: CardProps) {
 }
 
 export default function DoctorDashboard({ user }: Readonly<Props>) {
+  const router = useRouter();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [realUserId, setRealUserId] = useState<number>(user?.userId ?? 0);
@@ -210,8 +214,25 @@ export default function DoctorDashboard({ user }: Readonly<Props>) {
     .filter((a) => a.status === 'SCHEDULED' || a.status === 'ACTIVE')
     .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
     .slice(0, 3);
+  const allowedPatientPeers = Array.from(
+    new Map(
+      appointments
+        .filter((appointment): appointment is Appointment & { recipientId: number } => typeof appointment.recipientId === 'number')
+        .map((appointment) => [
+          String(appointment.recipientId),
+          {
+            id: String(appointment.recipientId),
+            name: appointment.recipientName ?? `Patient #${appointment.recipientId}`,
+          },
+        ]),
+    ).values(),
+  );
 
-  const handleApprove = async (id: number) => {
+  const shouldAutoJoinAfterAccept = useCallback((startTime: string) => {
+    return new Date(startTime).getTime() - Date.now() <= AUTO_JOIN_WINDOW_MS;
+  }, []);
+
+  const handleApprove = useCallback(async (id: number, startTime: string) => {
     if (!user?.token) return;
     try {
       const res = await fetch(`/api/v1/appointments/${id}/status`, {
@@ -219,11 +240,18 @@ export default function DoctorDashboard({ user }: Readonly<Props>) {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` },
         body: JSON.stringify({ status: 'ACTIVE' }),
       });
-      if (res.ok) void fetchData();
+      if (res.ok) {
+        void fetchData();
+        if (shouldAutoJoinAfterAccept(startTime)) {
+          router.push(`/doctor/consult/${id}`);
+        }
+      } else {
+        console.error('[DoctorDashboard] approve failed', res.status, await res.text());
+      }
     } catch (e) { console.error('[DoctorDashboard] approve failed', e); }
-  };
+  }, [fetchData, router, shouldAutoJoinAfterAccept, user?.token]);
 
-  const handleDecline = async (id: number) => {
+  const handleDecline = useCallback(async (id: number) => {
     if (!user?.token) return;
     try {
       const res = await fetch(`/api/v1/appointments/${id}/status`, {
@@ -231,9 +259,13 @@ export default function DoctorDashboard({ user }: Readonly<Props>) {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` },
         body: JSON.stringify({ status: 'CANCELLED' }),
       });
-      if (res.ok) void fetchData();
+      if (res.ok) {
+        void fetchData();
+      } else {
+        console.error('[DoctorDashboard] decline failed', res.status, await res.text());
+      }
     } catch (e) { console.error('[DoctorDashboard] decline failed', e); }
-  };
+  }, [fetchData, user?.token]);
 
   const handlePostInsight = async () => {
     const payload = { category: insightCategory, title: insightTitle, body: insightBody };
@@ -366,11 +398,17 @@ export default function DoctorDashboard({ user }: Readonly<Props>) {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                       <span style={{ ...textStyles.label, fontSize: 12 }}>{appt.recipientName ?? `Patient #${appt.id}`}</span>
                       <span style={{ ...textStyles.muted, fontSize: 10 }}>
-                        {appt.type ?? 'Virtual Consultation'} · {new Date(appt.startTime).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
+                        Virtual Consultation · {new Date(appt.startTime).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
                       </span>
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button type="button" style={{ ...blackFilledBtn, fontSize: 10, padding: '6px 12px' }} onClick={() => void handleApprove(appt.id)}>APPROVE</button>
+                      <button
+                        type="button"
+                        style={{ ...blackFilledBtn, fontSize: 10, padding: '6px 12px' }}
+                        onClick={() => void handleApprove(appt.id, appt.startTime)}
+                      >
+                        {shouldAutoJoinAfterAccept(appt.startTime) ? 'ACCEPT & JOIN' : 'ACCEPT'}
+                      </button>
                       <button type="button" style={{ ...outlinedBtn, fontSize: 10, padding: '6px 12px' }} onClick={() => void handleDecline(appt.id)}>DECLINE</button>
                     </div>
                   </div>
@@ -381,7 +419,7 @@ export default function DoctorDashboard({ user }: Readonly<Props>) {
 
           {/* In-Network Chat */}
           <DashCard title="IN-NETWORK CHAT" action={<a href="/doctor/messages" style={{ ...textStyles.muted, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', textDecoration: 'none', color: webTheme.colors.accentStrong }}>FULL SCREEN ›</a>}>
-            <ChatPanel userName={doctorName} height={380} embedded />
+            <ChatPanel userName={doctorName} height={380} embedded allowedPeers={allowedPatientPeers} />
           </DashCard>
 
         </div>
@@ -462,8 +500,13 @@ export default function DoctorDashboard({ user }: Readonly<Props>) {
                       <span style={{ ...textStyles.muted, fontSize: 10 }}>{new Date(appt.startTime).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}</span>
                     </div>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                      {appt.status === 'ACTIVE' && (
+                        <span style={{ ...pill('success'), fontSize: 9, padding: '3px 7px' }}>LIVE</span>
+                      )}
                       <a href={`/doctor/patient/${appt.recipientId ?? appt.id}`} style={{ ...outlinedBtn, fontSize: 9, padding: '4px 8px' }}>VIEW PATIENT</a>
-                      <a href={`/doctor/consult/${appt.id}`} style={{ ...blackFilledBtn, fontSize: 10, padding: '6px 12px' }}>START</a>
+                      <a href={`/doctor/consult/${appt.id}`} style={{ ...blackFilledBtn, fontSize: 10, padding: '6px 12px' }}>
+                        {appt.status === 'ACTIVE' ? 'JOIN VIDEO' : 'OPEN CALL'}
+                      </a>
                     </div>
                   </div>
                 ))}

@@ -28,6 +28,11 @@ import { webTheme } from '@/lib/designSystem';
 
 interface ChatTokenResponse { token: string; userId: string; apiKey: string; }
 
+interface AllowedPeerOption {
+  id: string;
+  name?: string;
+}
+
 interface Props {
   readonly userName?:      string;
   readonly height?:        number;   // px, default 420
@@ -42,6 +47,12 @@ interface Props {
    * Default: false (show full two-pane layout).
    */
   readonly embedded?:      boolean;
+  /** queue-first embedded mode: show a conversation queue before opening a thread */
+  readonly queueFirst?:    boolean;
+  /** restrict embedded queue mode to conversations whose peer id is in this allow-list */
+  readonly allowedPeerIds?: string[];
+  /** optional labeled peer list for mapped doctor/patient conversations */
+  readonly allowedPeers?: ReadonlyArray<AllowedPeerOption>;
 }
 
 // ── CHAT-005: Urgent message custom components ────────────────────────────────
@@ -117,20 +128,105 @@ function ChannelSyncer({ channel }: { channel: StreamChannel | null }) {
   return null;
 }
 
-export default function ChatPanel({ userName, height = 420, peerUserId, peerName, appointmentId, embedded = false }: Readonly<Props>) {
+function getPeerMember(channel: StreamChannel, selfUserId: string | null) {
+  return Object.values(channel.state.members ?? {}).find((member) => member.user?.id !== selfUserId);
+}
+
+function getChannelDisplayName(channel: StreamChannel, selfUserId: string | null) {
+  const peerMember = getPeerMember(channel, selfUserId);
+  const peerName = peerMember?.user?.name?.trim();
+  if (peerName) return peerName;
+
+  const channelName = typeof channel.data?.name === 'string' ? channel.data.name.trim() : '';
+  if (channelName) return channelName;
+
+  return peerMember?.user?.id ? `Patient ${peerMember.user.id}` : 'Conversation';
+}
+
+function getLastMessagePreview(channel: StreamChannel) {
+  const lastMessage = channel.state.messages[channel.state.messages.length - 1];
+  const messageText = lastMessage?.text?.trim();
+  if (messageText) return messageText;
+  if ((lastMessage?.attachments?.length ?? 0) > 0) return 'Attachment shared';
+  return 'No messages yet';
+}
+
+function formatQueueTimestamp(channel: StreamChannel) {
+  const lastMessage = channel.state.messages[channel.state.messages.length - 1];
+  const rawTime = lastMessage?.created_at ?? channel.data?.last_message_at ?? channel.data?.updated_at;
+  if (!rawTime) return '';
+
+  const timestamp = new Date(rawTime);
+  const now = new Date();
+  const isSameDay = timestamp.toDateString() === now.toDateString();
+  return isSameDay
+    ? timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : timestamp.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+export default function ChatPanel({
+  userName,
+  height = 420,
+  peerUserId,
+  peerName,
+  appointmentId,
+  embedded = false,
+  queueFirst = false,
+  allowedPeerIds,
+  allowedPeers,
+}: Readonly<Props>) {
   const clientRef             = useRef<StreamChat | null>(null);
   const [streamUserId,   setStreamUserId]   = useState<string | null>(null);
   const [activeChannel,  setActiveChannel]  = useState<StreamChannel | null>(null);
+  const [queuedChannels, setQueuedChannels] = useState<StreamChannel[]>([]);
   const [ready,          setReady]          = useState(false);
   const [loading,        setLoading]        = useState(true);
   const [isStub,         setIsStub]         = useState(false);
   const [error,          setError]          = useState<string | null>(null);
+  const [queueLoading,   setQueueLoading]   = useState(false);
   // Doctor-side compose state
   const [composing,      setComposing]      = useState(false);
   const [composeId,      setComposeId]      = useState('');
   const [composeName,    setComposeName]    = useState('');
   const [composeLoading, setComposeLoading] = useState(false);
   const [composeError,   setComposeError]   = useState<string | null>(null);
+  const [queueComposerOpen, setQueueComposerOpen] = useState(false);
+  const [queueComposePatientQuery, setQueueComposePatientQuery] = useState('');
+  const [queueComposeSelectedPeer, setQueueComposeSelectedPeer] = useState<AllowedPeerOption | null>(null);
+  const [queueComposeMatches, setQueueComposeMatches] = useState<AllowedPeerOption[]>([]);
+  const [queueComposeSearching, setQueueComposeSearching] = useState(false);
+  const [queueComposeSearchError, setQueueComposeSearchError] = useState<string | null>(null);
+  const [queueComposeMessage, setQueueComposeMessage] = useState('');
+  const [queueComposeLoading, setQueueComposeLoading] = useState(false);
+  const [queueComposeError, setQueueComposeError] = useState<string | null>(null);
+  const isEmbeddedQueueMode = embedded && (queueFirst || !peerUserId);
+  const allowedPeerOptions = (() => {
+    const peerById = new Map<string, AllowedPeerOption>();
+
+    for (const peerId of allowedPeerIds ?? []) {
+      const normalizedPeerId = peerId.trim();
+      if (normalizedPeerId.length === 0) continue;
+      peerById.set(normalizedPeerId, { id: normalizedPeerId });
+    }
+
+    for (const peer of allowedPeers ?? []) {
+      const normalizedPeerId = peer.id.trim();
+      if (normalizedPeerId.length === 0) continue;
+      const normalizedPeerName = peer.name?.trim();
+      const existingPeer = peerById.get(normalizedPeerId);
+      peerById.set(normalizedPeerId, {
+        id: normalizedPeerId,
+        name: normalizedPeerName && normalizedPeerName.length > 0 ? normalizedPeerName : existingPeer?.name,
+      });
+    }
+
+    return Array.from(peerById.values())
+      .sort((left, right) => (left.name ?? left.id).localeCompare(right.name ?? right.id));
+  })();
+  const allowedPeerIdsKey = allowedPeerIds == null && allowedPeers == null
+    ? null
+    : allowedPeerOptions.map((peer) => peer.id).join('|');
+  const normalizedQueueComposeQuery = queueComposePatientQuery.trim().toLowerCase();
 
   // ── Create or fetch a direct channel between self and peer ──────────────
   const openOrCreateChannel = useCallback(async (
@@ -149,6 +245,42 @@ export default function ChatPanel({ userName, height = 420, peerUserId, peerName
     setActiveChannel(ch);
     return ch;
   }, []);
+
+  const filterChannelsByAllowedPeers = useCallback((channels: StreamChannel[], selfId: string) => {
+    const allowedPeerSet = allowedPeerIdsKey == null
+      ? null
+      : new Set(allowedPeerIdsKey.length > 0 ? allowedPeerIdsKey.split('|') : []);
+    if (allowedPeerSet == null) return channels;
+    return channels.filter((channel) => {
+      const allowedPeerId = getPeerMember(channel, selfId)?.user?.id;
+      return allowedPeerId != null && allowedPeerSet.has(allowedPeerId);
+    });
+  }, [allowedPeerIdsKey]);
+
+  const refreshQueuedChannels = useCallback(async (
+    client: StreamChat,
+    selfId: string,
+    showLoader = true,
+  ) => {
+    if (showLoader) setQueueLoading(true);
+    try {
+      const nextChannels = await client.queryChannels(
+        { type: 'messaging', members: { $in: [selfId] } },
+        { last_message_at: -1 },
+        { limit: 30, watch: true, state: true },
+      );
+
+      const filteredChannels = filterChannelsByAllowedPeers(nextChannels, selfId);
+
+      setQueuedChannels(filteredChannels);
+      setActiveChannel((current) => {
+        if (!current) return current;
+        return filteredChannels.find((channel) => channel.cid === current.cid) ?? null;
+      });
+    } finally {
+      if (showLoader) setQueueLoading(false);
+    }
+  }, [filterChannelsByAllowedPeers]);
 
   // ── Connect to Stream on mount ───────────────────────────────────────────
   useEffect(() => {
@@ -175,20 +307,9 @@ export default function ChatPanel({ userName, height = 420, peerUserId, peerName
         if (!cancelled) {
           setStreamUserId(data.userId);
           setReady(true);
-          if (peerUserId) {
+          if (peerUserId && !isEmbeddedQueueMode) {
             // Patient side: auto-open the channel with the doctor immediately
             await openOrCreateChannel(client, data.userId, peerUserId, peerName);
-          } else if (embedded) {
-            // Embedded mode (doctor dashboard): no ChannelList sidebar, so
-            // auto-select the most recent channel so history shows immediately.
-            const recent = await client.queryChannels(
-              { type: 'messaging', members: { $in: [data.userId] } },
-              { last_message_at: -1 },
-              { limit: 1, watch: true, state: true },
-            );
-            if (!cancelled && recent.length > 0) {
-              setActiveChannel(recent[0]);
-            }
           }
         }
       } catch (e) {
@@ -203,7 +324,108 @@ export default function ChatPanel({ userName, height = 420, peerUserId, peerName
       clientRef.current?.disconnectUser().catch(() => {});
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userName, peerUserId, peerName, embedded]);
+  }, [userName, peerUserId, peerName, isEmbeddedQueueMode]);
+
+  useEffect(() => {
+    if (!isEmbeddedQueueMode || !clientRef.current || !streamUserId) return;
+
+    let cancelled = false;
+    const client = clientRef.current;
+
+    const loadQueue = async (showLoader = true) => {
+      try {
+        await refreshQueuedChannels(client, streamUserId, showLoader);
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : String(e));
+        }
+      }
+    };
+
+    void loadQueue(true);
+
+    const subscription = client.on((event) => {
+      if (
+        event.type === 'message.new' ||
+        event.type === 'notification.message_new' ||
+        event.type === 'notification.added_to_channel' ||
+        event.type === 'channel.updated'
+      ) {
+        void loadQueue(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, [isEmbeddedQueueMode, refreshQueuedChannels, streamUserId]);
+
+  useEffect(() => {
+    if (!queueComposerOpen || !isEmbeddedQueueMode || peerUserId) return;
+
+    const selectedPeerLabel = (queueComposeSelectedPeer?.name ?? (queueComposeSelectedPeer != null ? `Patient #${queueComposeSelectedPeer.id}` : '')).trim().toLowerCase();
+    if (queueComposeSelectedPeer != null && normalizedQueueComposeQuery === selectedPeerLabel) {
+      setQueueComposeMatches([]);
+      setQueueComposeSearching(false);
+      setQueueComposeSearchError(null);
+      return;
+    }
+
+    if (normalizedQueueComposeQuery.length < 2) {
+      setQueueComposeMatches([]);
+      setQueueComposeSearching(false);
+      setQueueComposeSearchError(null);
+      return;
+    }
+
+    const jwt = getTokenFromCookie();
+    if (!jwt) {
+      setQueueComposeMatches([]);
+      setQueueComposeSearching(false);
+      setQueueComposeSearchError('Chat session expired. Refresh and sign in again.');
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        setQueueComposeSearching(true);
+        setQueueComposeSearchError(null);
+        try {
+          const response = await fetch(`/api/v1/chat/patients/search?q=${encodeURIComponent(queueComposePatientQuery.trim())}`, {
+            headers: { Authorization: `Bearer ${jwt}` },
+          });
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+
+          const payload = await response.json() as Array<{ userId: number; name: string }>;
+          if (cancelled) return;
+
+          setQueueComposeMatches(
+            payload.map((patient) => ({
+              id: String(patient.userId),
+              name: patient.name,
+            })),
+          );
+        } catch (e) {
+          if (cancelled) return;
+          setQueueComposeMatches([]);
+          setQueueComposeSearchError(e instanceof Error ? e.message : 'Failed to search patients');
+        } finally {
+          if (!cancelled) {
+            setQueueComposeSearching(false);
+          }
+        }
+      })();
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [isEmbeddedQueueMode, normalizedQueueComposeQuery, peerUserId, queueComposerOpen, queueComposePatientQuery, queueComposeSelectedPeer]);
 
   // ── Doctor-side: start a new conversation by Stream userId ──────────────
   const handleStartConversation = useCallback(async () => {
@@ -222,6 +444,76 @@ export default function ChatPanel({ userName, height = 420, peerUserId, peerName
     }
   }, [clientRef, streamUserId, composeId, composeName, openOrCreateChannel]);
 
+  const resetQueueComposer = useCallback(() => {
+    setQueueComposerOpen(false);
+    setQueueComposePatientQuery('');
+    setQueueComposeSelectedPeer(null);
+    setQueueComposeMatches([]);
+    setQueueComposeSearching(false);
+    setQueueComposeSearchError(null);
+    setQueueComposeMessage('');
+    setQueueComposeLoading(false);
+    setQueueComposeError(null);
+  }, []);
+
+  const handleOpenQueuedChannel = useCallback((channel: StreamChannel) => {
+    resetQueueComposer();
+    setActiveChannel(channel);
+  }, [resetQueueComposer]);
+
+  const handleBackToQueue = useCallback(() => {
+    resetQueueComposer();
+    setActiveChannel(null);
+  }, [resetQueueComposer]);
+
+  const handleQueueComposerSelectPeer = useCallback((peer: AllowedPeerOption) => {
+    setQueueComposePatientQuery(peer.name ?? `Patient #${peer.id}`);
+    setQueueComposeSelectedPeer(peer);
+    setQueueComposeMatches([]);
+    setQueueComposeError(null);
+    setQueueComposeSearchError(null);
+  }, []);
+
+  const handleQueueComposerCancel = useCallback(() => {
+    resetQueueComposer();
+  }, [resetQueueComposer]);
+
+  const handleQueueComposerSend = useCallback(async () => {
+    if (!clientRef.current || !streamUserId) return;
+
+    const peer = queueComposeSelectedPeer;
+    const messageText = queueComposeMessage.trim();
+
+    if (!peer) {
+      setQueueComposeError('Search and select an enrolled patient first.');
+      return;
+    }
+    if (messageText.length === 0) {
+      setQueueComposeError('Enter a message to send.');
+      return;
+    }
+
+    setQueueComposeLoading(true);
+    setQueueComposeError(null);
+    try {
+      const channel = await openOrCreateChannel(clientRef.current, streamUserId, peer.id, peer.name);
+      await channel.sendMessage({ text: messageText });
+      await refreshQueuedChannels(clientRef.current, streamUserId, false);
+      setActiveChannel(null);
+      resetQueueComposer();
+    } catch (e) {
+      setQueueComposeError(e instanceof Error ? e.message : 'Failed to send message');
+      setQueueComposeLoading(false);
+    }
+  }, [
+    openOrCreateChannel,
+    queueComposeMessage,
+    queueComposeSelectedPeer,
+    refreshQueuedChannels,
+    resetQueueComposer,
+    streamUserId,
+  ]);
+
   // ── Loading / error / stub states ────────────────────────────────────────
   if (loading) return <div style={styles.stateBox}><span style={styles.stateText}>Connecting to chat…</span></div>;
   if (error)   return <div style={{ ...styles.stateBox, borderColor: '#FFC107', backgroundColor: '#FFF3CD' }}><span style={{ ...styles.stateText, color: '#996600' }}>⚠ Chat: {error}</span></div>;
@@ -235,6 +527,10 @@ export default function ChatPanel({ userName, height = 420, peerUserId, peerName
 
   const filters: ChannelFilters = { type: 'messaging', members: { $in: [streamUserId] } };
   const sort: ChannelSort = { last_message_at: -1 };
+  const channelRenderFilterFn = streamUserId == null
+    ? undefined
+    : (channels: StreamChannel[]) => filterChannelsByAllowedPeers(channels, streamUserId);
+  const canCreateMappedConversation = isEmbeddedQueueMode && !peerUserId && allowedPeerOptions.length > 0;
 
   return (
     <div className="dhv-chat-root" style={{ ...styles.chatRoot, minHeight: height }}>
@@ -250,7 +546,7 @@ export default function ChatPanel({ userName, height = 420, peerUserId, peerName
       <Chat client={clientRef.current} theme="str-chat__theme-light">
 
         {/* Doctor-side: NEW MESSAGE compose bar */}
-        {!peerUserId && (
+        {!peerUserId && !isEmbeddedQueueMode && (
           <div style={styles.newMsgBar}>
             {composing ? (
               <div style={styles.composeForm}>
@@ -287,22 +583,181 @@ export default function ChatPanel({ userName, height = 420, peerUserId, peerName
         )}
 
         {embedded ? (
-          /* ── Embedded mode: single-pane, no channel list sidebar ── */
-          <>
-            {/* Sync programmatically-opened channels into Stream state (compose / peer-open / history auto-load) */}
-            <ChannelSyncer channel={activeChannel} />
-            <div style={{ height, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-              <Channel Message={CustomMessage}>
-                <Window>
-                  <MessageList
-                    Message={CustomMessage}
-                    disableDateSeparator={false}
-                  />
-                  <MessageInput />
-                </Window>
-              </Channel>
-            </div>
-          </>
+          isEmbeddedQueueMode ? (
+            <>
+              <ChannelSyncer channel={activeChannel} />
+              <div style={{ height, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                {activeChannel ? (
+                  <div style={styles.embeddedThreadWrap}>
+                    <div style={styles.embeddedThreadHeader}>
+                      <button type="button" style={styles.backBtn} onClick={handleBackToQueue}>
+                        ← Back
+                      </button>
+                      <div style={styles.threadTitleWrap}>
+                        <span style={styles.threadTitle}>{getChannelDisplayName(activeChannel, streamUserId)}</span>
+                        <span style={styles.threadSubtitle}>Conversation history</span>
+                      </div>
+                    </div>
+                    <div style={styles.embeddedThreadBody}>
+                      <Channel channel={activeChannel} Message={CustomMessage}>
+                        <Window>
+                          <MessageList Message={CustomMessage} disableDateSeparator={false} />
+                          <UrgentToggleBar />
+                          <MessageInput />
+                        </Window>
+                      </Channel>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={styles.queueView}>
+                      <div style={styles.queueHeader}>
+                        <div style={styles.queueHeadingBlock}>
+                          <span style={styles.queueEyebrow}>Care Network</span>
+                          <span style={styles.queueHeading}>Previous Chats</span>
+                        </div>
+                        <div style={styles.queueHeaderActions}>
+                          {canCreateMappedConversation && (
+                            <button
+                              type="button"
+                              style={styles.queueActionBtn}
+                              onClick={() => {
+                                setQueueComposeError(null);
+                                setQueueComposerOpen(true);
+                              }}
+                            >
+                              + New Message
+                            </button>
+                          )}
+                          <span style={styles.queueCount}>{queuedChannels.length}</span>
+                        </div>
+                      </div>
+                      {queueComposerOpen && (
+                        <div style={styles.queueComposerCard}>
+                          <div style={styles.queueComposerField}>
+                            <label htmlFor="queue-compose-patient" style={styles.queueComposerLabel}>Patient Name</label>
+                            <input
+                              id="queue-compose-patient"
+                              type="text"
+                              value={queueComposePatientQuery}
+                              placeholder="Search mapped patient"
+                              autoComplete="off"
+                              style={styles.queueComposerInput}
+                              onChange={(event) => {
+                                setQueueComposePatientQuery(event.target.value);
+                                setQueueComposeSelectedPeer(null);
+                                setQueueComposeError(null);
+                                setQueueComposeSearchError(null);
+                              }}
+                            />
+                            {queueComposeSelectedPeer && queueComposePatientQuery.trim() === (queueComposeSelectedPeer.name ?? `Patient #${queueComposeSelectedPeer.id}`) ? (
+                              <div style={styles.queueComposerHint}>
+                                Selected patient: <strong>{queueComposeSelectedPeer.name ?? `Patient #${queueComposeSelectedPeer.id}`}</strong>
+                              </div>
+                            ) : queueComposeSearching ? (
+                              <div style={styles.queueComposerHint}>Searching enrolled patients…</div>
+                            ) : queueComposeSearchError ? (
+                              <div style={styles.queueComposerError}>{queueComposeSearchError}</div>
+                            ) : queueComposeMatches.length > 0 ? (
+                              <div style={styles.queueComposerMatches}>
+                                {queueComposeMatches.map((peer) => (
+                                  <button
+                                    key={peer.id}
+                                    type="button"
+                                    style={styles.queueComposerMatchBtn}
+                                    onClick={() => handleQueueComposerSelectPeer(peer)}
+                                  >
+                                    <span style={styles.queueComposerMatchName}>{peer.name ?? `Patient #${peer.id}`}</span>
+                                    <span style={styles.queueComposerMatchMeta}>mapped patient</span>
+                                  </button>
+                                ))}
+                              </div>
+                            ) : normalizedQueueComposeQuery.length >= 2 ? (
+                              <div style={styles.queueComposerHint}>No enrolled patients match that name.</div>
+                            ) : (
+                              <div style={styles.queueComposerHint}>Enter at least 2 characters to search enrolled patients.</div>
+                            )}
+                          </div>
+                          <div style={styles.queueComposerField}>
+                            <label htmlFor="queue-compose-message" style={styles.queueComposerLabel}>Message</label>
+                            <textarea
+                              id="queue-compose-message"
+                              value={queueComposeMessage}
+                              placeholder="Type the first message to send"
+                              rows={3}
+                              style={styles.queueComposerTextarea}
+                              onChange={(event) => {
+                                setQueueComposeMessage(event.target.value);
+                                setQueueComposeError(null);
+                              }}
+                            />
+                          </div>
+                          {queueComposeError && (
+                            <div style={styles.queueComposerError}>{queueComposeError}</div>
+                          )}
+                          <div style={styles.queueComposerActions}>
+                            <button
+                              type="button"
+                              style={styles.queueComposerSendBtn}
+                              onClick={() => void handleQueueComposerSend()}
+                              disabled={queueComposeLoading}
+                            >
+                              {queueComposeLoading ? 'Sending…' : 'Send Message'}
+                            </button>
+                            <button
+                              type="button"
+                              style={styles.queueComposerCancelBtn}
+                              onClick={handleQueueComposerCancel}
+                              disabled={queueComposeLoading}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      <div style={styles.queueScroll}>
+                        {queueLoading ? (
+                          <div style={styles.queueState}>Loading conversation queue…</div>
+                        ) : queuedChannels.length === 0 ? (
+                          <div style={styles.queueState}>No mapped chats yet.</div>
+                        ) : (
+                          queuedChannels.map((channel) => (
+                            <button
+                              key={channel.cid}
+                              type="button"
+                              style={styles.queueItem}
+                              onClick={() => handleOpenQueuedChannel(channel)}
+                            >
+                              <div style={styles.queueItemTop}>
+                                <span style={styles.queueItemName}>{getChannelDisplayName(channel, streamUserId)}</span>
+                                <span style={styles.queueItemTime}>{formatQueueTimestamp(channel)}</span>
+                              </div>
+                              <span style={styles.queueItemPreview}>{getLastMessagePreview(channel)}</span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            /* ── Embedded mode: single-pane, no channel list sidebar ── */
+            <>
+              {/* Sync programmatically-opened channels into Stream state (compose / peer-open / history auto-load) */}
+              <ChannelSyncer channel={activeChannel} />
+              <div style={{ height, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <Channel Message={CustomMessage}>
+                  <Window>
+                    <MessageList
+                      Message={CustomMessage}
+                      disableDateSeparator={false}
+                    />
+                    <MessageInput />
+                  </Window>
+                </Channel>
+              </div>
+            </>
+          )
         ) : (
           /* ── Full two-pane layout ── */
           <>
@@ -313,6 +768,7 @@ export default function ChatPanel({ userName, height = 420, peerUserId, peerName
                 <ChannelList
                   filters={filters}
                   sort={sort}
+                  channelRenderFilterFn={channelRenderFilterFn}
                   EmptyStateIndicator={() => (
                     <div style={styles.emptyChannels}>
                       <span style={styles.emptyIcon}>💬</span>
@@ -468,6 +924,302 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: '#FFF0F0',
     display: 'flex',
     justifyContent: 'flex-end',
+  },
+  queueView: {
+    height: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    backgroundColor: webTheme.colors.surface,
+  },
+  queueHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    gap: 12,
+    padding: '14px 16px 12px',
+    borderBottom: `1px solid ${webTheme.colors.border}`,
+    backgroundColor: webTheme.colors.surfaceAlt,
+  },
+  queueHeaderActions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+  },
+  queueHeadingBlock: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+  },
+  queueEyebrow: {
+    fontFamily: webTheme.font.sans,
+    fontSize: 10,
+    fontWeight: 700,
+    letterSpacing: '0.12em',
+    textTransform: 'uppercase',
+    color: webTheme.colors.mutedText,
+  },
+  queueHeading: {
+    fontFamily: webTheme.font.sans,
+    fontSize: 18,
+    fontWeight: 700,
+    color: webTheme.colors.text,
+  },
+  queueActionBtn: {
+    border: `1px solid ${webTheme.colors.borderStrong}`,
+    borderRadius: 999,
+    backgroundColor: webTheme.colors.surface,
+    color: webTheme.colors.text,
+    padding: '7px 12px',
+    fontFamily: webTheme.font.sans,
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: '0.05em',
+    textTransform: 'uppercase',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  },
+  queueCount: {
+    minWidth: 28,
+    height: 28,
+    borderRadius: 999,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: webTheme.colors.surface,
+    border: `1px solid ${webTheme.colors.borderStrong}`,
+    fontFamily: webTheme.font.sans,
+    fontSize: 12,
+    fontWeight: 700,
+    color: webTheme.colors.text,
+  },
+  queueScroll: {
+    flex: 1,
+    overflowY: 'auto',
+    padding: 8,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+  },
+  queueState: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    textAlign: 'center',
+    fontFamily: webTheme.font.sans,
+    fontSize: 13,
+    color: webTheme.colors.mutedText,
+  },
+  queueComposerCard: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 12,
+    padding: 12,
+    borderBottom: `1px solid ${webTheme.colors.border}`,
+    backgroundColor: webTheme.colors.surfaceAlt,
+  },
+  queueComposerField: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+  },
+  queueComposerLabel: {
+    fontFamily: webTheme.font.sans,
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase',
+    color: webTheme.colors.text,
+  },
+  queueComposerInput: {
+    width: '100%',
+    border: `1px solid ${webTheme.colors.borderStrong}`,
+    borderRadius: 14,
+    backgroundColor: webTheme.colors.surface,
+    color: webTheme.colors.text,
+    padding: '10px 12px',
+    fontFamily: webTheme.font.sans,
+    fontSize: 13,
+    outline: 'none',
+  },
+  queueComposerTextarea: {
+    width: '100%',
+    border: `1px solid ${webTheme.colors.borderStrong}`,
+    borderRadius: 14,
+    backgroundColor: webTheme.colors.surface,
+    color: webTheme.colors.text,
+    padding: '10px 12px',
+    fontFamily: webTheme.font.sans,
+    fontSize: 13,
+    lineHeight: '19px',
+    outline: 'none',
+    resize: 'vertical',
+  },
+  queueComposerMatches: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+    maxHeight: 168,
+    overflowY: 'auto',
+  },
+  queueComposerMatchBtn: {
+    width: '100%',
+    textAlign: 'left',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+    padding: '10px 12px',
+    borderRadius: 12,
+    border: `1px solid ${webTheme.colors.border}`,
+    backgroundColor: webTheme.colors.surface,
+    cursor: 'pointer',
+  },
+  queueComposerMatchName: {
+    fontFamily: webTheme.font.sans,
+    fontSize: 13,
+    fontWeight: 700,
+    color: webTheme.colors.text,
+  },
+  queueComposerMatchMeta: {
+    fontFamily: webTheme.font.sans,
+    fontSize: 11,
+    color: webTheme.colors.mutedText,
+  },
+  queueComposerHint: {
+    fontFamily: webTheme.font.sans,
+    fontSize: 12,
+    color: webTheme.colors.mutedText,
+    padding: '4px 2px 0',
+  },
+  queueComposerError: {
+    borderRadius: 14,
+    border: `1px solid rgba(184, 154, 95, 0.35)`,
+    backgroundColor: '#FFF7E8',
+    padding: '12px 14px',
+    fontFamily: webTheme.font.sans,
+    fontSize: 12,
+    lineHeight: '18px',
+    color: '#8A6116',
+  },
+  queueComposerActions: {
+    display: 'flex',
+    gap: 8,
+  },
+  queueComposerSendBtn: {
+    flex: 1,
+    border: 'none',
+    borderRadius: 999,
+    backgroundColor: webTheme.colors.accent,
+    color: webTheme.colors.white,
+    padding: '10px 14px',
+    fontFamily: webTheme.font.sans,
+    fontSize: 12,
+    fontWeight: 700,
+    letterSpacing: '0.06em',
+    textTransform: 'uppercase',
+    cursor: 'pointer',
+  },
+  queueComposerCancelBtn: {
+    border: `1px solid ${webTheme.colors.borderStrong}`,
+    borderRadius: 999,
+    backgroundColor: webTheme.colors.surface,
+    color: webTheme.colors.text,
+    padding: '10px 14px',
+    fontFamily: webTheme.font.sans,
+    fontSize: 12,
+    fontWeight: 700,
+    letterSpacing: '0.06em',
+    textTransform: 'uppercase',
+    cursor: 'pointer',
+  },
+  queueItem: {
+    width: '100%',
+    textAlign: 'left',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+    padding: '14px 14px 12px',
+    borderRadius: 16,
+    border: `1px solid ${webTheme.colors.border}`,
+    backgroundColor: webTheme.colors.surface,
+    cursor: 'pointer',
+  },
+  queueItemTop: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    gap: 10,
+  },
+  queueItemName: {
+    fontFamily: webTheme.font.sans,
+    fontSize: 13,
+    fontWeight: 700,
+    color: webTheme.colors.text,
+  },
+  queueItemTime: {
+    fontFamily: webTheme.font.sans,
+    fontSize: 11,
+    color: webTheme.colors.mutedText,
+    whiteSpace: 'nowrap',
+  },
+  queueItemPreview: {
+    fontFamily: webTheme.font.sans,
+    fontSize: 12,
+    lineHeight: '18px',
+    color: webTheme.colors.mutedText,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  embeddedThreadWrap: {
+    height: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    backgroundColor: webTheme.colors.surface,
+  },
+  embeddedThreadHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    padding: '12px 14px',
+    borderBottom: `1px solid ${webTheme.colors.border}`,
+    backgroundColor: webTheme.colors.surfaceAlt,
+  },
+  backBtn: {
+    border: `1px solid ${webTheme.colors.borderStrong}`,
+    borderRadius: 999,
+    backgroundColor: webTheme.colors.surface,
+    color: webTheme.colors.text,
+    padding: '7px 12px',
+    fontFamily: webTheme.font.sans,
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: 'pointer',
+  },
+  threadTitleWrap: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+    minWidth: 0,
+  },
+  threadTitle: {
+    fontFamily: webTheme.font.sans,
+    fontSize: 14,
+    fontWeight: 700,
+    color: webTheme.colors.text,
+  },
+  threadSubtitle: {
+    fontFamily: webTheme.font.sans,
+    fontSize: 11,
+    color: webTheme.colors.mutedText,
+  },
+  embeddedThreadBody: {
+    flex: 1,
+    minHeight: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
   },
   chatLayout:      { display: 'flex', overflow: 'hidden' },
   channelListPane: { width: 248, borderRight: `1px solid ${webTheme.colors.border}`, overflowY: 'auto', flexShrink: 0, backgroundColor: webTheme.colors.surface },

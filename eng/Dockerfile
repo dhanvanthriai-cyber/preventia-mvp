@@ -23,6 +23,7 @@ RUN mvn dependency:go-offline -B
 
 # CACHE_BUST forces this layer to recompile when passed as --build-arg CACHE_BUST=$(date +%s)
 ARG CACHE_BUST=1
+RUN echo "$CACHE_BUST" > /tmp/cache-bust
 COPY src ./src
 RUN mvn clean package -DskipTests -B
 
@@ -54,12 +55,15 @@ RUN keytool -importcert -noprompt \
       -file /tmp/amazon-root-ca-1.pem && \
     rm /tmp/amazon-rsa-2048-m03.pem /tmp/amazon-root-ca-1.pem
 
+COPY docker/local-dev-entrypoint.sh /usr/local/bin/local-dev-entrypoint.sh
 COPY --from=build /app/target/*.jar app.jar
-RUN chown preventia:preventia app.jar
+RUN cp "$JAVA_HOME/lib/security/cacerts" /app/dev-cacerts && \
+    chown preventia:preventia app.jar /app/dev-cacerts && \
+    chmod 755 /usr/local/bin/local-dev-entrypoint.sh
 
 USER preventia
 
 EXPOSE 8080
 
 # $JAVA_OPTS allows runtime tuning (heap, GC flags, etc.)
-ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+ENTRYPOINT ["/usr/local/bin/local-dev-entrypoint.sh"]

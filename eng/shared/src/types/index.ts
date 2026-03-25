@@ -20,7 +20,7 @@ export interface AuthUser {
 // ─── Appointments ─────────────────────────────────────────────────────────────
 
 /** Must match com.preventia.appointment.domain.AppointmentStatus */
-export type AppointmentStatus = 'SCHEDULED' | 'ACTIVE' | 'COMPLETED' | 'LOCKED';
+export type AppointmentStatus = 'SCHEDULED' | 'ACTIVE' | 'CANCELLED' | 'COMPLETED' | 'LOCKED';
 
 export interface Appointment {
   id: number;

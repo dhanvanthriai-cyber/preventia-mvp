@@ -12,6 +12,9 @@ import com.preventia.family.domain.User;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -184,6 +187,15 @@ public class AppointmentService {
         org.slf4j.LoggerFactory.getLogger(AppointmentService.class);
 
     /**
+     * Cancel an appointment before it starts.
+     */
+    public AppointmentResponse cancelAppointment(Long appointmentId) {
+        Appointment appointment = findOrThrow(appointmentId);
+        appointment.setStatus(AppointmentStatus.CANCELLED);
+        return toResponse(appointment, null);
+    }
+
+    /**
      * Mark an appointment COMPLETED — called when the session ends normally.
      */
     public AppointmentResponse completeAppointment(Long appointmentId) {
@@ -201,6 +213,24 @@ public class AppointmentService {
         Appointment appointment = findOrThrow(appointmentId);
         appointment.setStatus(AppointmentStatus.LOCKED);
         return toResponse(appointment, null);
+    }
+
+    /**
+     * Compatibility endpoint for the web dashboard's approve / decline flow.
+     * Maps a requested status to the corresponding explicit transition.
+     */
+    public AppointmentResponse updateAppointmentStatus(Long appointmentId, AppointmentStatus requestedStatus) {
+        if (requestedStatus == null) {
+            throw new ResponseStatusException(BAD_REQUEST, "Appointment status is required");
+        }
+
+        return switch (requestedStatus) {
+            case ACTIVE -> activateAppointment(appointmentId);
+            case CANCELLED -> cancelAppointment(appointmentId);
+            case COMPLETED -> completeAppointment(appointmentId);
+            case LOCKED -> lockAppointment(appointmentId);
+            case SCHEDULED -> throw new ResponseStatusException(BAD_REQUEST, "Cannot transition an appointment back to SCHEDULED");
+        };
     }
 
     // -------------------------------------------------------------------------

@@ -51,6 +51,7 @@ export default function PatientMessagesPage({
   return (
     <FullScreenChat
       userName={user.name}
+      userId={user.userId}
       roleLabel="Patient"
       backHref="/patient"
       peerUserId={searchParams?.peer}

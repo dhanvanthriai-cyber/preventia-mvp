@@ -7,6 +7,7 @@ import com.preventia.chat.service.ChatNotificationService;
 import com.preventia.family.domain.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -37,11 +38,13 @@ public class NoShowScheduler {
     private static final int NO_SHOW_GRACE_MINUTES = 10;
     private static final DateTimeFormatter DATE_FMT =
         DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a").withZone(ZoneId.of("Asia/Kolkata"));
+    private static final String STUB_SENTINEL = "STUB";
 
     private final AppointmentRepository   appointmentRepository;
     private final ChatNotificationService chatNotificationService;
     private final UserRepository          userRepository;
     private final RestClient              dailyRestClient;
+    private final boolean                 stubMode;
 
     @Value("${app.clinic-phone:+91-80-1234-5678}")
     private String clinicPhone;
@@ -49,14 +52,13 @@ public class NoShowScheduler {
     public NoShowScheduler(AppointmentRepository appointmentRepository,
                            ChatNotificationService chatNotificationService,
                            UserRepository userRepository,
-                           @Value("${daily.api-key:STUB_KEY}") String dailyApiKey) {
+                           @Qualifier("dailyRestClient") RestClient dailyRestClient,
+                           @Value("${daily.api-key:STUB}") String dailyApiKey) {
         this.appointmentRepository   = appointmentRepository;
         this.chatNotificationService = chatNotificationService;
         this.userRepository          = userRepository;
-        this.dailyRestClient = RestClient.builder()
-            .baseUrl("https://api.daily.co/v1")
-            .defaultHeader("Authorization", "Bearer " + dailyApiKey)
-            .build();
+        this.dailyRestClient         = dailyRestClient;
+        this.stubMode                = dailyApiKey == null || dailyApiKey.isBlank() || dailyApiKey.startsWith(STUB_SENTINEL);
     }
 
     /**
@@ -64,6 +66,10 @@ public class NoShowScheduler {
      */
     @Scheduled(fixedDelay = 5 * 60 * 1000)
     public void checkDoctorNoShows() {
+        if (stubMode) {
+            return;
+        }
+
         OffsetDateTime cutoff = OffsetDateTime.now().minusMinutes(NO_SHOW_GRACE_MINUTES);
 
         List<Appointment> candidates = appointmentRepository.findScheduledStartedBefore(cutoff);

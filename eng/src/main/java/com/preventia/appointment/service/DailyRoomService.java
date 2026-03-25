@@ -3,24 +3,15 @@ package com.preventia.appointment.service;
 import com.preventia.appointment.dto.DailyRoomProvisionResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManagerFactory;
-import java.io.InputStream;
-import java.security.KeyStore;
-import java.security.cert.CertificateFactory;
-import java.security.cert.X509Certificate;
 import java.time.OffsetDateTime;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Integrates with the Daily.co REST API to:
@@ -38,96 +29,17 @@ import java.util.Map;
 public class DailyRoomService {
 
     private static final Logger log            = LoggerFactory.getLogger(DailyRoomService.class);
-    private static final String DAILY_API_BASE = "https://api.daily.co/v1";
     private static final int    MAX_PARTICIPANTS = 3;
+    private static final String STUB_SENTINEL = "STUB";
+    private static final String STUB_ROOM_URL_BASE = "https://preventia.daily.co/";
 
     private final RestClient restClient;
+    private final boolean stubMode;
 
-    public DailyRoomService(@Value("${daily.api-key}") String apiKey) {
-        this.restClient = RestClient.builder()
-                .baseUrl(DAILY_API_BASE)
-                .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
-                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                .requestFactory(buildRequestFactory())
-                .build();
-    }
-
-    /**
-     * Builds an HttpComponentsClientHttpRequestFactory backed by an SSLContext that
-     * trusts both the default JVM cacerts AND the Amazon intermediate/root CAs bundled
-     * under src/main/resources/certs/.
-     *
-     * This means the app works even when the container image's cacerts is missing the
-     * Amazon RSA 2048 M03 intermediate — no image rebuild required.
-     */
-    private static HttpComponentsClientHttpRequestFactory buildRequestFactory() {
-        try {
-            // 1. Start from the JVM's default trust store
-            TrustManagerFactory defaultTmf =
-                    TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-            defaultTmf.init((KeyStore) null);   // null → uses the JVM cacerts
-
-            // 2. Build a new KeyStore with the bundled Amazon certs added on top
-            KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
-            ks.load(null, null);   // empty store — we'll populate it manually
-
-            // Copy entries from the default trust store into our KeyStore
-            KeyStore defaultKs = KeyStore.getInstance(KeyStore.getDefaultType());
-            String cacertsPath = System.getProperty("java.home") + "/lib/security/cacerts";
-            try (InputStream is = new java.io.FileInputStream(cacertsPath)) {
-                defaultKs.load(is, "changeit".toCharArray());
-            } catch (Exception ignored) {
-                // If we can't read the default store, continue with just the bundled certs
-            }
-            java.util.Enumeration<String> aliases = defaultKs.aliases();
-            while (aliases.hasMoreElements()) {
-                String alias = aliases.nextElement();
-                ks.setCertificateEntry(alias, defaultKs.getCertificate(alias));
-            }
-
-            // 3. Add the bundled Amazon certs
-            CertificateFactory cf = CertificateFactory.getInstance("X.509");
-            List<String> bundled = List.of(
-                    "certs/amazon-rsa-2048-m03.pem",
-                    "certs/amazon-root-ca-1.pem"
-            );
-            for (String path : bundled) {
-                try (InputStream is = new ClassPathResource(path).getInputStream()) {
-                    X509Certificate cert = (X509Certificate) cf.generateCertificate(is);
-                    String alias = "bundled-" + cert.getSubjectX500Principal().getName()
-                            .replaceAll("[^a-zA-Z0-9]", "-").toLowerCase();
-                    ks.setCertificateEntry(alias, cert);
-                    log.info("[DailyRoomService] Trusted bundled cert: {}", cert.getSubjectX500Principal());
-                }
-            }
-
-            // 4. Build SSLContext from the merged trust store
-            TrustManagerFactory tmf =
-                    TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-            tmf.init(ks);
-
-            SSLContext sslContext = SSLContext.getInstance("TLS");
-            sslContext.init(null, tmf.getTrustManagers(), null);
-
-            // 5. Wire into Apache HttpClient (used by HttpComponentsClientHttpRequestFactory)
-            org.apache.hc.client5.http.ssl.SSLConnectionSocketFactory sslSocketFactory =
-                    new org.apache.hc.client5.http.ssl.SSLConnectionSocketFactory(sslContext);
-
-            org.apache.hc.client5.http.impl.classic.CloseableHttpClient httpClient =
-                    org.apache.hc.client5.http.impl.classic.HttpClients.custom()
-                            .setConnectionManager(
-                                    org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder.create()
-                                            .setSSLSocketFactory(sslSocketFactory)
-                                            .build()
-                            )
-                            .build();
-
-            return new HttpComponentsClientHttpRequestFactory(httpClient);
-
-        } catch (Exception e) {
-            log.warn("[DailyRoomService] Could not build custom SSLContext — falling back to JVM default. Cause: {}", e.getMessage());
-            return new HttpComponentsClientHttpRequestFactory();
-        }
+    public DailyRoomService(@Qualifier("dailyRestClient") RestClient restClient,
+                            @Value("${daily.api-key:STUB}") String dailyApiKey) {
+        this.restClient = restClient;
+        this.stubMode = isStubKey(dailyApiKey);
     }
 
     public DailyRoomProvisionResult provision(
@@ -138,6 +50,9 @@ public class DailyRoomService {
 
         long expEpoch = endTime.toInstant().getEpochSecond();
         String roomName = "preventia-appt-" + appointmentId;
+        if (stubMode) {
+            return stubProvisionResult(roomName, doctorId, doctorName, recipientId, recipientName, sponsorId, sponsorName);
+        }
 
         String roomUrl = createRoom(roomName, expEpoch);
         log.info("[DailyRoomService] Room created: {} exp={}", roomName, expEpoch);
@@ -174,8 +89,12 @@ public class DailyRoomService {
             Long sponsorId, String sponsorName) {
 
         long expEpoch = endTime.toInstant().getEpochSecond();
+        if (stubMode) {
+            return stubProvisionResult(roomName, doctorId, doctorName, recipientId, recipientName, sponsorId, sponsorName);
+        }
+
         // Derive the room URL from the room name (Daily.co uses a fixed URL pattern)
-        String roomUrl = "https://preventia.daily.co/" + roomName;
+        String roomUrl = STUB_ROOM_URL_BASE + roomName;
 
         String doctorToken    = createToken(roomName, doctorName,    String.valueOf(doctorId),    true,  expEpoch);
         String recipientToken = createToken(roomName, recipientName, String.valueOf(recipientId), false, expEpoch);
@@ -186,6 +105,37 @@ public class DailyRoomService {
 
         log.info("[DailyRoomService] Tokens re-issued for room={}", roomName);
         return new DailyRoomProvisionResult(roomUrl, roomName, doctorToken, recipientToken, sponsorToken);
+    }
+
+    private DailyRoomProvisionResult stubProvisionResult(
+            String roomName,
+            Long doctorId, String doctorName,
+            Long recipientId, String recipientName,
+            Long sponsorId, String sponsorName) {
+
+        String roomUrl = STUB_ROOM_URL_BASE + roomName;
+        String doctorToken = stubToken("doctor", roomName, doctorId, doctorName);
+        String recipientToken = stubToken("recipient", roomName, recipientId, recipientName);
+        String sponsorToken = null;
+
+        if (sponsorId != null && sponsorName != null) {
+            sponsorToken = stubToken("sponsor", roomName, sponsorId, sponsorName);
+        }
+
+        log.info("[DailyRoomService] STUB mode — skipping Daily API calls for room={}", roomName);
+        return new DailyRoomProvisionResult(roomUrl, roomName, doctorToken, recipientToken, sponsorToken);
+    }
+
+    private static String stubToken(String role, String roomName, Long userId, String userName) {
+        String safeName = (userName == null || userName.isBlank())
+                ? role
+                : userName.replaceAll("[^a-zA-Z0-9]+", "_").replaceAll("^_+|_+$", "").toLowerCase();
+        return "stub_daily_" + role + "_" + roomName + "_" + userId + "_" + safeName + "_" +
+                UUID.nameUUIDFromBytes((roomName + ":" + role + ":" + userId).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    private static boolean isStubKey(String apiKey) {
+        return apiKey == null || apiKey.isBlank() || apiKey.startsWith(STUB_SENTINEL);
     }
 
     @SuppressWarnings("unchecked")

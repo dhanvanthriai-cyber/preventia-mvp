@@ -73,8 +73,10 @@ Fill `.env` with placeholders you receive separately. At minimum, set:
 POSTGRES_PASSWORD=<local-postgres-password>
 JWT_SECRET=<32-plus-byte-secret>
 JWT_EXPIRY_SECONDS=86400
-DAILY_API_KEY=STUB
-DAILY_WEBHOOK_SECRET=STUB
+DAILY_API_KEY=<real-daily-api-key-or-STUB>
+DAILY_WEBHOOK_SECRET=<real-daily-webhook-secret-or-STUB>
+DAILY_DYNAMIC_CA_IMPORT_ENABLED=true
+DAILY_DYNAMIC_CA_IMPORT_HOST=api.daily.co
 AWS_ACCESS_KEY_ID=STUB
 AWS_SECRET_ACCESS_KEY=STUB
 AWS_REGION=ap-south-1
@@ -87,6 +89,13 @@ RAZORPAY_API_SECRET=STUB
 APP_ADMIN_BOOTSTRAP_SECRET=<local-bootstrap-secret>
 LOG_LEVEL=INFO
 ```
+
+If you use real Daily keys locally, keep `DAILY_DYNAMIC_CA_IMPORT_ENABLED=true`. On each container start, the app imports the live issuer chain currently presented for `api.daily.co` into a writable local JVM trust store. That makes local video-call testing work even on networks that intercept outbound TLS.
+
+`DAILY_API_KEY=STUB` enables local Daily stub mode:
+- appointment creation succeeds without calling `api.daily.co`
+- fake room URLs/tokens are returned for local UI flows
+- real video rooms are not created in local dev
 
 Web app local env:
 

@@ -3,6 +3,7 @@ package com.preventia.appointment.controller;
 import com.preventia.appointment.domain.Appointment;
 import com.preventia.appointment.dto.AppointmentResponse;
 import com.preventia.appointment.dto.CreateAppointmentRequest;
+import com.preventia.appointment.dto.UpdateAppointmentStatusRequest;
 import com.preventia.appointment.repository.AppointmentRepository;
 import com.preventia.appointment.service.AppointmentService;
 import com.preventia.auth.repository.UserRepository;
@@ -121,6 +122,14 @@ public class AppointmentController {
     @PreAuthorize("hasAnyRole('DOCTOR', 'RECIPIENT', 'SPONSOR')")
     public ResponseEntity<AppointmentResponse> completeAppointment(@PathVariable Long id) {
         return ResponseEntity.ok(appointmentService.completeAppointment(id));
+    }
+
+    @PutMapping("/api/v1/appointments/{id}/status")
+    @PreAuthorize("hasRole('DOCTOR')")
+    public ResponseEntity<AppointmentResponse> updateAppointmentStatus(
+            @PathVariable Long id,
+            @RequestBody UpdateAppointmentStatusRequest request) {
+        return ResponseEntity.ok(appointmentService.updateAppointmentStatus(id, request.status()));
     }
 
     @PutMapping("/api/v1/appointments/{id}/lock")

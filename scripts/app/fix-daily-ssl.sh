@@ -1,17 +1,33 @@
 #!/usr/bin/env bash
-# fix-daily-ssl.sh — Import Amazon CA certs into the running preventia-app
-# container's JVM trust store WITHOUT a full rebuild.
+# fix-daily-ssl.sh — Import Daily.co-related CA certs into the running
+# preventia-app container's JVM trust store WITHOUT a full rebuild.
 #
 # Run this once from your Mac:
 #   bash scripts/app/fix-daily-ssl.sh
 #
 # The fix survives container restarts (as long as the same container is reused).
 # For a permanent fix, run rebuild-and-restart.sh which bakes the certs into the image.
+#
+# Why this script exists:
+# - Some networks intercept outbound TLS (for example Cisco Secure Access).
+# - In those cases, api.daily.co does NOT present the normal Daily/Amazon chain.
+# - Importing only Amazon certs will still fail with PKIX inside the container.
+#
+# This script imports BOTH:
+#   1. The repo's bundled fallback certs for the direct Daily/Amazon chain
+#   2. The live CA chain currently presented for api.daily.co on this machine
 
 set -euo pipefail
 
 CONTAINER="preventia-app"
 STOREPASS="changeit"
+TLS_HOST="${TLS_HOST:-api.daily.co}"
+TMP_DIR="$(mktemp -d)"
+
+cleanup() {
+  rm -rf "$TMP_DIR"
+}
+trap cleanup EXIT
 
 echo "=== Daily.co SSL Fix (live container patch) ==="
 echo ""
@@ -30,37 +46,81 @@ echo "  JAVA_HOME : $JAVA_HOME"
 echo "  cacerts   : $CACERTS"
 echo ""
 
-# Copy the bundled PEM files into the container
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-echo "▶ Copying Amazon CA certs into container..."
-podman cp "$REPO_ROOT/eng/src/main/resources/certs/amazon-rsa-2048-m03.pem" \
-          "${CONTAINER}:/tmp/amazon-rsa-2048-m03.pem"
-podman cp "$REPO_ROOT/eng/src/main/resources/certs/amazon-root-ca-1.pem" \
-          "${CONTAINER}:/tmp/amazon-root-ca-1.pem"
-echo "  ✅ Certs copied"
+copy_into_container() {
+  local src="$1"
+  local dest="$2"
+  podman exec -i "$CONTAINER" sh -lc "cat > '$dest'" < "$src"
+}
+
+import_cert() {
+  local src="$1"
+  local alias_name="$2"
+  local dest="/tmp/${alias_name}.pem"
+
+  copy_into_container "$src" "$dest"
+  podman exec -u root "$CONTAINER" keytool -importcert -noprompt \
+    -keystore "$CACERTS" \
+    -storepass "$STOREPASS" \
+    -alias "$alias_name" \
+    -file "$dest" 2>&1 | grep -v "^Warning" || true
+}
+
+echo "▶ Importing bundled Daily/Amazon fallback certs..."
+import_cert "$REPO_ROOT/eng/src/main/resources/certs/amazon-rsa-2048-m03.pem" "amazon-rsa-2048-m03"
+import_cert "$REPO_ROOT/eng/src/main/resources/certs/amazon-root-ca-1.pem" "amazon-root-ca-1"
+echo "  ✅ Bundled fallback certs imported"
 echo ""
 
-echo "▶ Importing Amazon RSA 2048 M03 (intermediate)..."
-podman exec -u root "$CONTAINER" keytool -importcert -noprompt \
-  -keystore "$CACERTS" \
-  -storepass "$STOREPASS" \
-  -alias amazon-rsa-2048-m03 \
-  -file /tmp/amazon-rsa-2048-m03.pem 2>&1 | grep -v "^Warning" || true
-echo "  ✅ Done"
+echo "▶ Fetching live certificate chain for ${TLS_HOST}..."
+openssl s_client -showcerts -servername "$TLS_HOST" -connect "${TLS_HOST}:443" </dev/null \
+  > "$TMP_DIR/openssl.out" 2> "$TMP_DIR/openssl.err"
 
-echo "▶ Importing Amazon Root CA 1..."
-podman exec -u root "$CONTAINER" keytool -importcert -noprompt \
-  -keystore "$CACERTS" \
-  -storepass "$STOREPASS" \
-  -alias amazon-root-ca-1 \
-  -file /tmp/amazon-root-ca-1.pem 2>&1 | grep -v "^Warning" || true
-echo "  ✅ Done"
+awk -v outdir="$TMP_DIR" '
+  /-----BEGIN CERTIFICATE-----/ {
+    file = sprintf("%s/chain-%02d.pem", outdir, ++count)
+  }
+  file != "" {
+    print >> file
+  }
+  /-----END CERTIFICATE-----/ {
+    close(file)
+    file = ""
+  }
+' "$TMP_DIR/openssl.out"
+
+CHAIN_FILES=("$TMP_DIR"/chain-*.pem)
+if [[ ! -e "${CHAIN_FILES[0]}" ]]; then
+  echo "❌ Could not extract any certificates from openssl output."
+  echo "OpenSSL stderr:"
+  sed -n '1,120p' "$TMP_DIR/openssl.err"
+  exit 1
+fi
+
+echo "  Extracted ${#CHAIN_FILES[@]} certificate(s) from the live chain"
 echo ""
+
+if (( ${#CHAIN_FILES[@]} > 1 )); then
+  echo "▶ Importing live CA certificates presented for ${TLS_HOST}..."
+  for pem in "${CHAIN_FILES[@]:1}"; do
+    subject="$(openssl x509 -in "$pem" -noout -subject | sed 's/^subject=//')"
+    fingerprint="$(openssl x509 -in "$pem" -noout -fingerprint -sha256 | sed 's/.*=//' | tr -d ':')"
+    short_fp="${fingerprint:0:12}"
+    alias_name="daily-live-${short_fp}"
+    echo "  • $subject"
+    import_cert "$pem" "$alias_name"
+  done
+  echo "  ✅ Live CA chain imported"
+  echo ""
+else
+  echo "▶ Live chain contained only the leaf certificate; no extra CA certs to import."
+  echo ""
+fi
 
 echo "▶ Cleaning up temp files..."
-podman exec -u root "$CONTAINER" rm -f /tmp/amazon-rsa-2048-m03.pem /tmp/amazon-root-ca-1.pem
+podman exec -u root "$CONTAINER" sh -lc 'rm -f /tmp/amazon-rsa-2048-m03.pem /tmp/amazon-root-ca-1.pem /tmp/daily-live-*.pem'
 echo ""
 
 echo "▶ Restarting Spring Boot inside container (sends SIGTERM → process auto-restarts)..."

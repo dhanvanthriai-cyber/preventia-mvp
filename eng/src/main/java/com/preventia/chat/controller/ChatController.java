@@ -3,6 +3,7 @@ package com.preventia.chat.controller;
 import com.preventia.appointment.domain.Appointment;
 import com.preventia.appointment.repository.AppointmentRepository;
 import com.preventia.auth.repository.UserRepository;
+import com.preventia.chat.dto.ChatPatientSearchResult;
 import com.preventia.chat.dto.ChatTokenResponse;
 import com.preventia.chat.service.ChatNotificationService;
 import com.preventia.chat.service.StreamChatService;
@@ -14,9 +15,14 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -119,6 +125,44 @@ public class ChatController {
         }
 
         return ResponseEntity.ok(result);
+    }
+
+    @GetMapping("/patients/search")
+    @PreAuthorize("hasRole('DOCTOR')")
+    public ResponseEntity<List<ChatPatientSearchResult>> searchPatients(
+            @RequestParam("q") String query,
+            Authentication authentication) {
+        String email = authentication.getName();
+        User doctor = userRepository.findByEmail(email)
+            .orElseThrow(() -> new IllegalStateException("Authenticated user not found: " + email));
+
+        String normalizedQuery = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
+        if (normalizedQuery.length() < 2) {
+            return ResponseEntity.ok(List.of());
+        }
+
+        Set<Long> recipientIds = appointmentRepository.findByDoctorId(doctor.getId()).stream()
+            .map(Appointment::getRecipientId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        if (recipientIds.isEmpty()) {
+            return ResponseEntity.ok(List.of());
+        }
+
+        List<ChatPatientSearchResult> matches = userRepository.findAllById(recipientIds).stream()
+            .filter(user -> user.getRole() == User.Role.RECIPIENT)
+            .filter(user -> user.getName() != null && user.getName().toLowerCase(Locale.ROOT).contains(normalizedQuery))
+            .sorted(
+                Comparator
+                    .comparing((User user) -> !user.getName().toLowerCase(Locale.ROOT).startsWith(normalizedQuery))
+                    .thenComparing(User::getName, String.CASE_INSENSITIVE_ORDER)
+            )
+            .limit(8)
+            .map(user -> new ChatPatientSearchResult(user.getId(), user.getName()))
+            .toList();
+
+        return ResponseEntity.ok(matches);
     }
 
     // -------------------------------------------------------------------------

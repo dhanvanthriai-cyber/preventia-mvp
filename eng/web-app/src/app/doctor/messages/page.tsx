@@ -45,6 +45,7 @@ export default function DoctorMessagesPage() {
   return (
     <FullScreenChat
       userName={user.name}
+      userId={user.userId}
       roleLabel="Doctor"
       backHref="/doctor"
     />

@@ -28,4 +28,10 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, Long> {
      * Used by the cold chain monitoring scheduler to check temperature compliance.
      */
     List<LabOrder> findByRequiresColdChainTrueAndStatusIn(List<LabOrderStatus> statuses);
+
+    /**
+     * All lab orders for a patient, most recent first.
+     * Used by the patient vault (/patient/vault) and dashboard.
+     */
+    List<LabOrder> findByPatientIdOrderByCreatedAtDesc(Long patientId);
 }

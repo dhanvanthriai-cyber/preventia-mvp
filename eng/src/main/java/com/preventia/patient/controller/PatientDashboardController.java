@@ -1,24 +1,33 @@
 package com.preventia.patient.controller;
 
+import com.preventia.appointment.domain.Appointment;
+import com.preventia.appointment.domain.AppointmentStatus;
+import com.preventia.appointment.repository.AppointmentRepository;
 import com.preventia.auth.repository.UserRepository;
 import com.preventia.clinical.domain.SoapNote;
 import com.preventia.clinical.dto.SoapNoteResponse;
 import com.preventia.clinical.repository.SoapNoteRepository;
 import com.preventia.family.domain.User;
+import com.preventia.lab.domain.LabOrder;
+import com.preventia.lab.repository.LabOrderRepository;
 import com.preventia.payment.dto.PaymentResponse;
 import com.preventia.payment.repository.PaymentRepository;
 import com.preventia.pharmacy.dto.MedicationResponse;
 import com.preventia.pharmacy.repository.MedicationRepository;
 import com.preventia.shared.service.S3Service;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -41,18 +50,24 @@ public class PatientDashboardController {
     private final MedicationRepository medicationRepository;
     private final PaymentRepository paymentRepository;
     private final S3Service s3Service;
+    private final AppointmentRepository appointmentRepository;
+    private final LabOrderRepository labOrderRepository;
 
     public PatientDashboardController(
             UserRepository userRepository,
             SoapNoteRepository soapNoteRepository,
             MedicationRepository medicationRepository,
             PaymentRepository paymentRepository,
-            S3Service s3Service) {
+            S3Service s3Service,
+            AppointmentRepository appointmentRepository,
+            LabOrderRepository labOrderRepository) {
         this.userRepository = userRepository;
         this.soapNoteRepository = soapNoteRepository;
         this.medicationRepository = medicationRepository;
         this.paymentRepository = paymentRepository;
         this.s3Service = s3Service;
+        this.appointmentRepository = appointmentRepository;
+        this.labOrderRepository = labOrderRepository;
     }
 
     // ── A. SOAP Notes (vitals + clinical history) ─────────────────────────────
@@ -175,6 +190,133 @@ public class PatientDashboardController {
             result.add(record);
         }
 
+        return ResponseEntity.ok(result);
+    }
+
+    // ── E. Consultation History ───────────────────────────────────────────────
+
+    /**
+     * Returns all completed/locked appointments for the patient, joined with their
+     * SOAP notes (if present). Most recent first.
+     *
+     * GET /api/v1/patients/me/consultation-history
+     */
+    @GetMapping("/consultation-history")
+    public ResponseEntity<List<Map<String, Object>>> getConsultationHistory(Authentication auth) {
+        Long patientId = resolvePatientId(auth);
+
+        List<Appointment> completed = appointmentRepository.findByRecipientId(patientId)
+                .stream()
+                .filter(a -> a.getStatus() == AppointmentStatus.COMPLETED
+                          || a.getStatus() == AppointmentStatus.LOCKED)
+                .sorted(Comparator.comparing(Appointment::getStartTime).reversed())
+                .toList();
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Appointment appt : completed) {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("appointmentId", appt.getId());
+            entry.put("doctorId", appt.getDoctorId());
+            entry.put("doctorName", null); // no doctorName column on Appointment — resolved client-side or via user lookup
+            entry.put("startTime", appt.getStartTime());
+            entry.put("endTime", appt.getEndTime());
+            entry.put("status", appt.getStatus());
+
+            // Attach SOAP note if present (keyed by appointmentId)
+            soapNoteRepository.findByPatientIdOrderByCreatedAtDesc(patientId)
+                    .stream()
+                    .filter(note -> appt.getId().equals(note.getAppointmentId()))
+                    .findFirst()
+                    .ifPresent(note -> {
+                        entry.put("subjective", note.getSubjective());
+                        entry.put("objective", note.getObjective());
+                        entry.put("assessment", note.getAssessment());
+                        entry.put("plan", note.getPlan());
+                        entry.put("prescriptionS3Key", note.getPrescriptionS3Key());
+
+                        List<String> keys = note.getPrescriptionS3Keys();
+                        if (keys != null && !keys.isEmpty()) {
+                            List<Map<String, Object>> files = new ArrayList<>();
+                            for (String k : keys) {
+                                if (k == null || k.isBlank()) continue;
+                                String filename = k.contains("/")
+                                        ? k.substring(k.lastIndexOf('/') + 1)
+                                        : k;
+                                Map<String, Object> fileEntry = new HashMap<>();
+                                fileEntry.put("filename", filename);
+                                fileEntry.put("url", s3Service.generatePresignedUrl(k));
+                                files.add(fileEntry);
+                            }
+                            entry.put("prescriptionFiles", files);
+                        }
+                    });
+
+            result.add(entry);
+        }
+        return ResponseEntity.ok(result);
+    }
+
+    // ── F. Lab Orders (vault) ─────────────────────────────────────────────────
+
+    /**
+     * Returns all lab orders for the patient, most recent first.
+     * For orders with a result PDF, generates a presigned S3 URL.
+     *
+     * GET /api/v1/patients/me/lab-orders
+     */
+    @GetMapping("/lab-orders")
+    public ResponseEntity<List<Map<String, Object>>> getLabOrders(Authentication auth) {
+        Long patientId = resolvePatientId(auth);
+
+        List<LabOrder> orders = labOrderRepository.findByPatientIdOrderByCreatedAtDesc(patientId);
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (LabOrder order : orders) {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("id", order.getId());
+            entry.put("testName", order.getTestName());
+            entry.put("labPartner", order.getLabPartner() != null
+                    ? order.getLabPartner().name() : null);
+            entry.put("status", order.getStatus());
+            entry.put("createdAt", order.getCreatedAt());
+
+            String pdfKey = order.getResultPdfKey();
+            if (pdfKey != null && !pdfKey.isBlank()) {
+                entry.put("resultUrl", s3Service.generatePresignedUrl(pdfKey));
+            } else {
+                entry.put("resultUrl", null);
+            }
+            result.add(entry);
+        }
+        return ResponseEntity.ok(result);
+    }
+
+    // ── G. Vitals History (devices) ───────────────────────────────────────────
+
+    /**
+     * Returns the last 10 SOAP notes for the patient with their objective text
+     * (vitals) and timestamps. Used by the Devices page vitals history table.
+     *
+     * GET /api/v1/patients/me/vitals-history
+     */
+    @GetMapping("/vitals-history")
+    public ResponseEntity<List<Map<String, Object>>> getVitalsHistory(Authentication auth) {
+        Long patientId = resolvePatientId(auth);
+
+        List<SoapNote> notes = soapNoteRepository
+                .findByPatientIdOrderByCreatedAtDesc(patientId)
+                .stream()
+                .limit(10)
+                .toList();
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (SoapNote note : notes) {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("appointmentId", note.getAppointmentId());
+            entry.put("createdAt", note.getCreatedAt());
+            entry.put("objective", note.getObjective());
+            result.add(entry);
+        }
         return ResponseEntity.ok(result);
     }
 

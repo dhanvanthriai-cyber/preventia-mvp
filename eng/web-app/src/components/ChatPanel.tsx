@@ -22,7 +22,7 @@ import {
   useMessageInputContext,
   useChatContext,
 } from 'stream-chat-react';
-import type { MessageProps } from 'stream-chat-react';
+import type { MessageUIComponentProps } from 'stream-chat-react';
 import 'stream-chat-react/dist/css/v2/index.css';
 import { webTheme } from '@/lib/designSystem';
 
@@ -61,7 +61,7 @@ interface Props {
  * CustomMessage — wraps MessageSimple with a red urgent banner
  * when message.extraData.urgent === true.
  */
-const CustomMessage = (props: MessageProps) => {
+const CustomMessage = (props: MessageUIComponentProps) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const isUrgent = (props.message as any)?.extraData?.urgent === true;
   return (

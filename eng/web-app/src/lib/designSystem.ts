@@ -96,7 +96,7 @@ export const pageShell: CSSProperties = {
   padding: '24px 20px 72px',
 };
 
-export const stack = (gap = webTheme.spacing.lg): CSSProperties => ({
+export const stack = (gap: CSSProperties['gap'] = webTheme.spacing.lg): CSSProperties => ({
   display: 'flex',
   flexDirection: 'column',
   gap,

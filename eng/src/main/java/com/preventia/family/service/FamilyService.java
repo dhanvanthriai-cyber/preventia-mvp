@@ -80,12 +80,20 @@ public class FamilyService {
             Long doctorId = appt.getDoctorId();
             userRepo.findById(doctorId).ifPresent(doctor -> {
                 try {
+                    // SPRINT-08 CHAT-006: 1:1 sponsor-doctor channel
                     chatNotificationService.createSponsorDoctorChannel(
                         sponsorId, doctorId, sponsorName, doctor.getName(), patientName
                     );
                     log.info("[FamilyService] Sponsor-doctor channel created: sponsor={} doctor={}", sponsorId, doctorId);
+
+                    // SPRINT-10 CHAT-014: 3-way care team channel (doctor + patient + sponsor)
+                    chatNotificationService.createCareTeamChannel(
+                        sponsorId, recipientId, doctorId,
+                        sponsorName, patientName, doctor.getName()
+                    );
+                    log.info("[FamilyService] Care team channel created: patient={}", recipientId);
                 } catch (Exception e) {
-                    log.warn("[FamilyService] Failed to create sponsor-doctor channel: {}", e.getMessage());
+                    log.warn("[FamilyService] Failed to create channels on consent GRANTED: {}", e.getMessage());
                 }
             });
         });

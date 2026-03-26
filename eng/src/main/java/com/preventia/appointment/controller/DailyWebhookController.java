@@ -1,6 +1,8 @@
 package com.preventia.appointment.controller;
 
+import com.preventia.appointment.domain.AppointmentTranscript;
 import com.preventia.appointment.repository.AppointmentRepository;
+import com.preventia.appointment.repository.AppointmentTranscriptRepository;
 import com.preventia.appointment.service.AppointmentService;
 import com.preventia.auth.repository.UserRepository;
 import com.preventia.chat.service.ChatNotificationService;
@@ -54,16 +56,18 @@ public class DailyWebhookController {
     private static final DateTimeFormatter DATE_FMT =
         DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a").withZone(ZoneId.of("Asia/Kolkata"));
 
-    private final AppointmentService      appointmentService;
-    private final AppointmentRepository   appointmentRepository;
-    private final ChatNotificationService chatNotificationService;
-    private final UserRepository          userRepository;
-    private final WebhookEventLogService  webhookEventLogService;
-    private final ObjectMapper            objectMapper;
-    private final byte[]                  secretBytes;
+    private final AppointmentService             appointmentService;
+    private final AppointmentRepository          appointmentRepository;
+    private final AppointmentTranscriptRepository transcriptRepository;
+    private final ChatNotificationService        chatNotificationService;
+    private final UserRepository                 userRepository;
+    private final WebhookEventLogService         webhookEventLogService;
+    private final ObjectMapper                   objectMapper;
+    private final byte[]                         secretBytes;
 
     public DailyWebhookController(AppointmentService appointmentService,
                                    AppointmentRepository appointmentRepository,
+                                   AppointmentTranscriptRepository transcriptRepository,
                                    ChatNotificationService chatNotificationService,
                                    UserRepository userRepository,
                                    WebhookEventLogService webhookEventLogService,
@@ -71,6 +75,7 @@ public class DailyWebhookController {
                                    @Value("${daily.webhook-secret}") String webhookSecret) {
         this.appointmentService      = appointmentService;
         this.appointmentRepository   = appointmentRepository;
+        this.transcriptRepository    = transcriptRepository;
         this.chatNotificationService = chatNotificationService;
         this.userRepository          = userRepository;
         this.webhookEventLogService  = webhookEventLogService;
@@ -114,6 +119,8 @@ public class DailyWebhookController {
                     // CHAT-010: Check for patient no-show on meeting-ended
                     handlePatientNoShow(payload, roomName);
                 }
+                // VIDEO-004: Store recording URL and notify doctor
+                case "recording-ready" -> handleRecordingReady(payload, roomName);
                 default -> log.debug("[DailyWebhook] Unhandled action={}", action);
             }
         }
@@ -163,7 +170,35 @@ public class DailyWebhookController {
      * CHAT-010: Patient no-show check on meeting-ended.
      * If the recipient was never in the participant list, send a missed appointment message.
      */
+    /**
+     * VIDEO-004: Handle recording-ready webhook — store URL in appointment_transcripts
+     * and notify the doctor via chat.
+     */
     @SuppressWarnings("unchecked")
+    private void handleRecordingReady(Map<String, Object> payload, String roomName) {
+        appointmentRepository.findByDailyRoomName(roomName).ifPresent(appt -> {
+            try {
+                // Extract recording URL from payload — Daily sends it under recording.mp4_url or output_file_url
+                String recordingUrl = null;
+                Object rec = payload.get("recording");
+                if (rec instanceof Map<?, ?> recMap) {
+                    recordingUrl = String.valueOf(((Map<String, Object>) recMap).getOrDefault("mp4_url",
+                        ((Map<String, Object>) recMap).getOrDefault("output_file_url", "")));
+                }
+                if (recordingUrl == null || recordingUrl.isBlank() || "null".equals(recordingUrl)) {
+                    log.warn("[DailyWebhook] recording-ready but no URL found for room={}", roomName);
+                    return;
+                }
+
+                transcriptRepository.save(new AppointmentTranscript(appt.getId(), recordingUrl));
+                chatNotificationService.sendRecordingReady(appt.getDoctorId(), appt.getId(), recordingUrl);
+                log.info("[DailyWebhook] VIDEO-004: Recording stored for appt={}", appt.getId());
+            } catch (Exception e) {
+                log.warn("[DailyWebhook] recording-ready handling failed for appt={}: {}", appt.getId(), e.getMessage());
+            }
+        });
+    }
+
     private void handlePatientNoShow(Map<String, Object> payload, String roomName) {
         appointmentRepository.findByDailyRoomName(roomName).ifPresent(appt -> {
             try {

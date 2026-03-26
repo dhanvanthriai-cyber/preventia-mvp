@@ -180,6 +180,70 @@ function AppointmentProposalCard({ message }: { message: Record<string, unknown>
 }
 
 /**
+ * CONSULT-009: SurveyCard — interactive star rating for satisfaction surveys.
+ */
+function SurveyCard({ message }: { message: Record<string, unknown> }) {
+  const [selected, setSelected] = React.useState<number | null>(null);
+  const [submitting, setSubmitting] = React.useState(false);
+  const [submitted, setSubmitted] = React.useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const extra = (message as any)?.extra_data ?? (message as any)?.extraData ?? {};
+  const appointmentId: number | undefined = extra.appointmentId;
+
+  const handleSubmit = async (rating: number) => {
+    if (submitted || submitting || !appointmentId) return;
+    setSelected(rating);
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/v1/feedback/consultation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ appointmentId, rating }),
+      });
+      if (res.ok) setSubmitted(true);
+    } catch { /* non-fatal */ }
+    finally { setSubmitting(false); }
+  };
+
+  return (
+    <div style={{ border: '2px solid #F59E0B', borderRadius: 8, padding: 14, margin: '6px 0', backgroundColor: '#FFFBEB', maxWidth: 360 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: 18 }}>⭐</span>
+        <span style={{ fontWeight: 700, fontSize: 13, color: '#92400E' }}>How was your consultation?</span>
+      </div>
+      {submitted ? (
+        <div style={{ color: '#16A34A', fontWeight: 700, fontSize: 12 }}>
+          ✅ Thank you for your feedback!
+        </div>
+      ) : (
+        <>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+            {[1, 2, 3, 4, 5].map((star) => (
+              <button
+                key={star}
+                type="button"
+                disabled={submitting}
+                onClick={() => void handleSubmit(star)}
+                style={{
+                  fontSize: 22, background: 'none', border: 'none', cursor: 'pointer',
+                  opacity: selected != null && star > selected ? 0.4 : 1,
+                  transform: selected === star ? 'scale(1.2)' : 'scale(1)',
+                  transition: 'transform 0.1s',
+                }}
+              >
+                ⭐
+              </button>
+            ))}
+          </div>
+          <p style={{ color: '#6B7280', fontFamily: webTheme.font.sans, margin: 0, fontSize: 11 }}>Tap a star to rate</p>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
  * CustomMessage — wraps MessageSimple with rich card renderers for typed messages:
  * - urgent → red urgent banner
  * - consent_request → ConsentCard with "I Agree" button
@@ -196,6 +260,9 @@ const CustomMessage = (props: MessageUIComponentProps) => {
   }
   if (extraType === 'appointment_proposal') {
     return <AppointmentProposalCard message={msg} />;
+  }
+  if (extraType === 'survey') {
+    return <SurveyCard message={msg} />;
   }
 
   return (

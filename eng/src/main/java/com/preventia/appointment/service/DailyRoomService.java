@@ -47,6 +47,20 @@ public class DailyRoomService {
             Long doctorId, String doctorName,
             Long recipientId, String recipientName,
             Long sponsorId, String sponsorName) {
+        return provision(appointmentId, endTime, doctorId, doctorName,
+            recipientId, recipientName, sponsorId, sponsorName, false);
+    }
+
+    /**
+     * VIDEO-004 overload: accepts recordingConsented flag.
+     * When true, cloud recording is enabled on the Daily.co room.
+     */
+    public DailyRoomProvisionResult provision(
+            String appointmentId, OffsetDateTime endTime,
+            Long doctorId, String doctorName,
+            Long recipientId, String recipientName,
+            Long sponsorId, String sponsorName,
+            boolean recordingConsented) {
 
         long expEpoch = endTime.toInstant().getEpochSecond();
         String roomName = "preventia-appt-" + appointmentId;
@@ -54,7 +68,7 @@ public class DailyRoomService {
             return stubProvisionResult(roomName, doctorId, doctorName, recipientId, recipientName, sponsorId, sponsorName);
         }
 
-        String roomUrl = createRoom(roomName, expEpoch);
+        String roomUrl = createRoom(roomName, expEpoch, recordingConsented);
         log.info("[DailyRoomService] Room created: {} exp={}", roomName, expEpoch);
 
         String doctorToken    = createToken(roomName, doctorName,    String.valueOf(doctorId),    true,  expEpoch);
@@ -140,12 +154,21 @@ public class DailyRoomService {
 
     @SuppressWarnings("unchecked")
     private String createRoom(String roomName, long expEpoch) {
+        return createRoom(roomName, expEpoch, false);
+    }
+
+    /** VIDEO-004: recordingConsented=true enables Daily.co cloud recording. */
+    private String createRoom(String roomName, long expEpoch, boolean recordingConsented) {
         Map<String, Object> properties = new HashMap<>();
         properties.put("exp", expEpoch);
         properties.put("max_participants", MAX_PARTICIPANTS);
         properties.put("enable_prejoin_ui", false);
         properties.put("enable_knocking", false);
         properties.put("eject_at_room_exp", true);
+        if (recordingConsented) {
+            properties.put("enable_recording", "cloud");
+            log.info("[DailyRoomService] Cloud recording enabled for room={}", roomName);
+        }
 
         Map<String, Object> body = new HashMap<>();
         body.put("name", roomName);

@@ -372,6 +372,213 @@ public class ChatNotificationService {
     }
 
     // -------------------------------------------------------------------------
+    // SPRINT-10 CHAT-014: Multi-party care team group channel
+    // -------------------------------------------------------------------------
+
+    /**
+     * CHAT-014: Create a 3-way group channel for doctor + patient + sponsor.
+     * Channel ID: care-team-{recipientId} (deterministic, one per patient).
+     * Called on sponsor consent GRANTED.
+     */
+    public void createCareTeamChannel(Long sponsorId, Long recipientId, Long doctorId,
+                                       String sponsorName, String patientName, String doctorName) {
+        if (isStub()) {
+            log.info("[ChatNotification] STUB — care team channel patient={}", recipientId);
+            return;
+        }
+
+        String channelId = "care-team-" + recipientId;
+        try {
+            String jwt = buildBotJwt();
+            String url = "https://chat.stream-io-api.com/channels/messaging/" + channelId;
+
+            Map<String, Object> channelData = new HashMap<>();
+            channelData.put("name", "Care Team — " + patientName);
+            channelData.put("created_by_id", BOT_USER_ID);
+
+            Map<String, Object> body = new HashMap<>();
+            body.put("data",        channelData);
+            body.put("add_members", java.util.List.of(
+                sponsorId.toString(), recipientId.toString(),
+                doctorId.toString(), BOT_USER_ID
+            ));
+
+            restClient.post()
+                .uri(url)
+                .header("Content-Type", "application/json")
+                .header("Authorization", jwt)
+                .header("stream-auth-type", "jwt")
+                .body(body)
+                .retrieve()
+                .toBodilessEntity();
+
+            // Welcome message
+            String welcome = String.format(
+                "👋 Welcome to your Care Team channel!\n\nDr. %s, %s, and %s are all connected here.\n" +
+                "Use this channel to share updates, ask questions, and coordinate care.",
+                doctorName, patientName, sponsorName
+            );
+            sendToChannel(channelId, welcome);
+            log.info("[ChatNotification] Care team channel created: patient={}", recipientId);
+        } catch (Exception e) {
+            log.warn("[ChatNotification] Failed to create care team channel: {}", e.getMessage());
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // SPRINT-10 VIDEO-004: Recording ready notification
+    // -------------------------------------------------------------------------
+
+    /**
+     * VIDEO-004: Notify the doctor that their session recording is ready.
+     */
+    public void sendRecordingReady(Long doctorId, Long appointmentId, String recordingUrl) {
+        if (isStub()) {
+            log.info("[ChatNotification] STUB — recording ready appt={}", appointmentId);
+            return;
+        }
+        // Send to the doctor's own system channel or the patient channel (doctor-side message)
+        // We use the doctor ID as both sides to send to a self-channel; in practice this
+        // would go to a doctor notification feed. For now we log and use sendSystemMessage
+        // with a special extraData type that the doctor dashboard can surface.
+        try {
+            String jwt = buildBotJwt();
+            // Notify via a doctor-specific notification — reuse the doctor's own user channel
+            // by posting to a notification channel named "notify-{doctorId}"
+            String channelId = "notify-" + doctorId;
+            String url = "https://chat.stream-io-api.com/channels/messaging/" + channelId + "/message";
+
+            Map<String, Object> extraData = new HashMap<>();
+            extraData.put("type",          "recording_ready");
+            extraData.put("appointmentId", appointmentId);
+            extraData.put("recordingUrl",  recordingUrl);
+
+            Map<String, Object> message = new HashMap<>();
+            message.put("text",       "🎬 Recording ready for appointment #" + appointmentId + "\n" + recordingUrl);
+            message.put("user_id",    BOT_USER_ID);
+            message.put("extra_data", extraData);
+
+            restClient.post()
+                .uri(url)
+                .header("Content-Type", "application/json")
+                .header("Authorization", jwt)
+                .header("stream-auth-type", "jwt")
+                .body(Map.of("message", message))
+                .retrieve()
+                .toBodilessEntity();
+
+            log.info("[ChatNotification] Recording ready sent: appt={}", appointmentId);
+        } catch (Exception e) {
+            log.warn("[ChatNotification] Failed to send recording ready: {}", e.getMessage());
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // SPRINT-10 CONSULT-007: Care plan check-in + missed alert
+    // -------------------------------------------------------------------------
+
+    /**
+     * CONSULT-007: Send a care plan check-in question to the patient.
+     */
+    public void sendCarePlanCheckin(Long doctorId, Long patientId,
+                                     Long carePlanId, String question) {
+        if (isStub()) {
+            log.info("[ChatNotification] STUB — care plan check-in plan={}", carePlanId);
+            return;
+        }
+        String channelId = buildChannelId(doctorId, patientId);
+        try {
+            String jwt = buildBotJwt();
+            String url = "https://chat.stream-io-api.com/channels/messaging/" + channelId + "/message";
+
+            Map<String, Object> extraData = new HashMap<>();
+            extraData.put("type",       "checkin");
+            extraData.put("carePlanId", carePlanId);
+
+            Map<String, Object> message = new HashMap<>();
+            message.put("text",       "📝 *Check-In*\n\n" + question + "\n\nReply here — your doctor will review your response.");
+            message.put("user_id",    BOT_USER_ID);
+            message.put("extra_data", extraData);
+
+            restClient.post()
+                .uri(url)
+                .header("Content-Type", "application/json")
+                .header("Authorization", jwt)
+                .header("stream-auth-type", "jwt")
+                .body(Map.of("message", message))
+                .retrieve()
+                .toBodilessEntity();
+        } catch (Exception e) {
+            log.warn("[ChatNotification] Failed to send care plan check-in: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * CONSULT-007: Alert doctor when patient has missed 3+ consecutive check-ins.
+     */
+    public void sendMissedCheckinAlert(Long doctorId, Long patientId,
+                                        Long carePlanId, int missedCount, String question) {
+        if (isStub()) {
+            log.info("[ChatNotification] STUB — missed check-in alert plan={}", carePlanId);
+            return;
+        }
+        String channelId = buildChannelId(doctorId, patientId);
+        String text = String.format(
+            "⚠️ *Missed Check-In Alert*\n\nPatient has not responded to %d consecutive check-in(s).\n\nQuestion: _%s_\n\nConsider following up directly.",
+            missedCount, question
+        );
+        sendToChannel(channelId, text);
+    }
+
+    // -------------------------------------------------------------------------
+    // SPRINT-10 CONSULT-009: Post-consultation satisfaction survey
+    // -------------------------------------------------------------------------
+
+    /**
+     * CONSULT-009: Send a satisfaction survey to the patient 30 minutes after LOCKED.
+     */
+    public void sendSatisfactionSurvey(Long doctorId, Long recipientId,
+                                        Long appointmentId, String doctorName) {
+        if (isStub()) {
+            log.info("[ChatNotification] STUB — satisfaction survey appt={}", appointmentId);
+            return;
+        }
+        String channelId = buildChannelId(doctorId, recipientId);
+        try {
+            String jwt = buildBotJwt();
+            String url = "https://chat.stream-io-api.com/channels/messaging/" + channelId + "/message";
+
+            String text = String.format(
+                "⭐ *How was your consultation?*\n\nPlease rate your experience with Dr. %s:\n\n" +
+                "Reply with a number from 1 (poor) to 5 (excellent), and optionally add a comment.",
+                doctorName
+            );
+
+            Map<String, Object> extraData = new HashMap<>();
+            extraData.put("type",          "survey");
+            extraData.put("appointmentId", appointmentId);
+
+            Map<String, Object> message = new HashMap<>();
+            message.put("text",       text);
+            message.put("user_id",    BOT_USER_ID);
+            message.put("extra_data", extraData);
+
+            restClient.post()
+                .uri(url)
+                .header("Content-Type", "application/json")
+                .header("Authorization", jwt)
+                .header("stream-auth-type", "jwt")
+                .body(Map.of("message", message))
+                .retrieve()
+                .toBodilessEntity();
+
+            log.info("[ChatNotification] Satisfaction survey sent: appt={}", appointmentId);
+        } catch (Exception e) {
+            log.warn("[ChatNotification] Failed to send satisfaction survey: {}", e.getMessage());
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // SPRINT-09 CHAT-009: Consent request via chat
     // -------------------------------------------------------------------------
 
@@ -634,6 +841,40 @@ public class ChatNotificationService {
 
         sendSystemMessage(doctorId, recipientId, text);
         log.info("[ChatNotification] Prescription dispatch notification sent for patient={}", recipientId);
+    }
+
+    // -------------------------------------------------------------------------
+    // SPRINT-10 CHAT-014: Care team channel sponsor permission update
+    // -------------------------------------------------------------------------
+
+    /**
+     * CHAT-014: Toggle sponsor to read-only (viewer) or full-member in the care team channel.
+     */
+    public void updateCareTeamMemberRole(String channelId, Long sponsorId, boolean readOnly) {
+        if (isStub()) {
+            log.info("[ChatNotification] STUB — care team permission update sponsorId={} readOnly={}", sponsorId, readOnly);
+            return;
+        }
+        try {
+            String jwt = buildBotJwt();
+            String url = "https://chat.stream-io-api.com/channels/messaging/" + channelId + "/member/" + sponsorId;
+            String role = readOnly ? "channel_viewer" : "channel_member";
+
+            Map<String, Object> body = Map.of("channel_role", role);
+
+            restClient.patch()
+                .uri(url)
+                .header("Content-Type", "application/json")
+                .header("Authorization", jwt)
+                .header("stream-auth-type", "jwt")
+                .body(body)
+                .retrieve()
+                .toBodilessEntity();
+
+            log.info("[ChatNotification] Care team permission updated: channelId={} sponsorId={} readOnly={}", channelId, sponsorId, readOnly);
+        } catch (Exception e) {
+            log.warn("[ChatNotification] Failed to update care team permissions: {}", e.getMessage());
+        }
     }
 
     // -------------------------------------------------------------------------

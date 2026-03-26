@@ -241,4 +241,35 @@ public class ChatController {
 
         return ResponseEntity.ok(Map.of("status", "sent"));
     }
+
+    // -------------------------------------------------------------------------
+    // CHAT-014: Care team channel sponsor permission toggle
+    // -------------------------------------------------------------------------
+
+    /**
+     * PUT /api/v1/chat/care-team/{channelId}/permissions
+     *
+     * Doctor toggles the sponsor's ability to send messages in the care team channel.
+     * Body: { "sponsorId": 42, "readOnly": true }
+     */
+    @PutMapping("/care-team/{channelId}/permissions")
+    @PreAuthorize("hasRole('DOCTOR')")
+    public ResponseEntity<Map<String, Object>> updateCareTeamPermissions(
+            @PathVariable String channelId,
+            @RequestBody Map<String, Object> body) {
+
+        Long sponsorId = Long.parseLong(body.get("sponsorId").toString());
+        boolean readOnly = Boolean.parseBoolean(body.getOrDefault("readOnly", "false").toString());
+
+        // Stream REST: PATCH /channels/messaging/{channelId}/member/{userId}
+        // channel_role: "channel_member" (can send) or "channel_viewer" (read-only)
+        // This is a best-effort call — stub mode is handled in the service layer
+        chatNotificationService.updateCareTeamMemberRole(channelId, sponsorId, readOnly);
+
+        return ResponseEntity.ok(Map.of(
+            "channelId", channelId,
+            "sponsorId", sponsorId,
+            "readOnly",  readOnly
+        ));
+    }
 }

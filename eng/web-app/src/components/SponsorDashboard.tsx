@@ -4,6 +4,10 @@ import React, { useCallback, useEffect, useState } from 'react';
 import type { Appointment, AuthUser } from '@preventia/shared';
 import { getAppointments } from '@preventia/shared';
 import { getTokenFromCookie } from '../lib/auth';
+import dynamic from 'next/dynamic';
+
+const ChatPanel      = dynamic(() => import('./ChatPanel'),      { ssr: false });
+const PatientTimeline = dynamic(() => import('./PatientTimeline'), { ssr: false });
 import {
   pageShell,
   photoPlaceholder,
@@ -370,30 +374,74 @@ export default function SponsorDashboard({ user }: Props) {
           ))}
         </div>
 
+        {/* Care Team Channel — doctor + patient + sponsor 3-way chat */}
+        {(() => {
+          const firstRecipientId = appointments.find(a => a.recipientId)?.recipientId;
+          if (!firstRecipientId) return null;
+          const careTeamChannelId = `care-team-${firstRecipientId}`;
+          const token = getTokenFromCookie() ?? '';
+          return (
+            <div style={{ ...cardStyle, gridColumn: 'span 2' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span style={textStyles.eyebrow}>Care team</span>
+                  <h2 style={{ ...textStyles.title, fontSize: 22, lineHeight: '28px', margin: 0 }}>
+                    Doctor · Patient · You
+                  </h2>
+                  <p style={{ ...textStyles.muted, margin: 0, fontSize: 13 }}>
+                    A shared channel connecting you, the patient, and their doctor in one place.
+                  </p>
+                </div>
+                <a href="/sponsor/messages" style={softButton('accent')}>Full screen ›</a>
+              </div>
+              <ChatPanel
+                userName={sponsorName}
+                height={340}
+                embedded
+                peerUserId={`care-team-${firstRecipientId}`}
+              />
+            </div>
+          );
+        })()}
+
+        {/* Care Timeline — patient's care history visible to sponsor */}
+        {(() => {
+          const firstRecipientId = appointments.find(a => a.recipientId)?.recipientId;
+          if (!firstRecipientId) return null;
+          const token = getTokenFromCookie() ?? '';
+          return (
+            <div style={cardStyle}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={textStyles.eyebrow}>Care history</span>
+                <h2 style={{ ...textStyles.title, fontSize: 22, lineHeight: '28px', margin: 0 }}>
+                  Recent care moments
+                </h2>
+              </div>
+              <PatientTimeline
+                patientId={firstRecipientId}
+                token={user?.token ?? token}
+                role="SPONSOR"
+                compact
+              />
+            </div>
+          );
+        })()}
+
         <div style={cardStyle}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={textStyles.eyebrow}>Concierge</span>
-            <h2 style={{ ...textStyles.title, fontSize: 26, lineHeight: '32px', margin: 0 }}>
-              Premium dashboard cues
+            <span style={textStyles.eyebrow}>Next steps</span>
+            <h2 style={{ ...textStyles.title, fontSize: 22, lineHeight: '32px', margin: 0 }}>
+              Plan the next visit
             </h2>
           </div>
-
           <div style={{ ...listCardStyle, backgroundColor: webTheme.colors.surfaceTint }}>
-            <div style={pill('accent')}>Payments</div>
+            <div style={pill('accent')}>Consultation booking</div>
             <div style={textStyles.body}>
-              Razorpay remains wired in, but the presentation now reads more like a family concierge than a billing console.
+              Book a teleconsultation for your family member with any available doctor.
             </div>
           </div>
-
-          <div style={{ ...listCardStyle, backgroundColor: webTheme.colors.goldTint }}>
-            <div style={pill('gold')}>Lifestyle-led imagery</div>
-            <div style={textStyles.body}>
-              Replace icon-heavy utility cards with premium family and home-device photography as real assets land.
-            </div>
-          </div>
-
           <a href="/sponsor/book" style={softButton('gold')}>
-            Plan the next visit
+            Book a consultation
           </a>
         </div>
       </section>

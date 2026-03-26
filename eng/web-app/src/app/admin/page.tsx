@@ -2,19 +2,24 @@ import {
   HeartPulse,
   Scale,
   Sparkles,
+  Star,
   UserRoundCog,
   Video,
 } from 'lucide-react';
 import AdminSectionPage from '@/components/admin/AdminSectionPage';
 import {
   fetchAdminDashboard,
+  fetchFeedbackAnalytics,
   formatAdminDateTime,
   getAdminSession,
 } from '@/lib/adminServer';
 
 export default async function AdminOverviewPage() {
-  const session = getAdminSession('/admin');
-  const dashboard = await fetchAdminDashboard(session.token);
+  const session  = getAdminSession('/admin');
+  const [dashboard, feedback] = await Promise.all([
+    fetchAdminDashboard(session.token),
+    fetchFeedbackAnalytics(session.token),
+  ]);
   const pulse = dashboard.pulseMetrics;
   const userCounts = dashboard.unifiedUserManagement.counts;
   const verification = dashboard.clinicalVerification.counts;
@@ -118,8 +123,14 @@ export default async function AdminOverviewPage() {
                 title: 'Video Ops & Webhooks',
                 body: `${dashboard.videoOperations.liveAppointments.length} live rooms and ${dashboard.videoOperations.recentWebhookEvents.length} recent webhook events are in view.`,
               },
+              {
+                title: 'Patient Satisfaction',
+                body: feedback
+                  ? `${feedback.totalResponses} survey response${feedback.totalResponses !== 1 ? 's' : ''}. Average rating: ${feedback.averageRating != null ? `${feedback.averageRating} / 5` : 'no data yet'}.`
+                  : 'No satisfaction data available.',
+              },
             ].map((item, index) => {
-              const icons = [UserRoundCog, Sparkles, Video] as const;
+              const icons = [UserRoundCog, Sparkles, Video, Star] as const;
               const Icon = icons[index % icons.length];
               return (
                 <div

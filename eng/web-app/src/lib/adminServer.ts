@@ -265,3 +265,29 @@ export function humanizeEnum(value: string) {
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
 }
+
+export interface FeedbackAnalytics {
+  totalResponses: number;
+  averageRating:  number | null;
+  distribution:   Array<{ rating: number; count: number }>;
+  recentComments: Array<{
+    rating:       number;
+    comment:      string;
+    submitted_at: string;
+    patient_name: string;
+    doctor_name:  string;
+  }>;
+}
+
+export async function fetchFeedbackAnalytics(token: string): Promise<FeedbackAnalytics | null> {
+  try {
+    const res = await fetch(`${getAppOrigin()}/api/v1/admin/feedback`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    });
+    if (!res.ok) return null;
+    return res.json() as Promise<FeedbackAnalytics>;
+  } catch {
+    return null;
+  }
+}

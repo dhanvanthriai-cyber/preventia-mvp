@@ -3,7 +3,7 @@
 import React, { FormEvent, useEffect, useRef, useState } from 'react';
 import Script from 'next/script';
 import { useRouter } from 'next/navigation';
-import { getDefaultRouteForRole, getUserFromToken, setTokenCookie } from '@/lib/auth';
+import { getDefaultRouteForRole, getUserFromToken, setTokenCookie, setRefreshToken } from '@/lib/auth';
 
 interface LoginApiResponse {
   accessToken: string;
@@ -294,6 +294,8 @@ export default function LandingAuthPortal({
 
   async function completeAuth(response: LoginApiResponse | RegisterApiResponse) {
     setTokenCookie(response.accessToken, response.expiresInSeconds ?? 86400);
+    // Store refresh token for silent session renewal
+    if (response.refreshToken) setRefreshToken(response.refreshToken);
     const decoded = getUserFromToken(response.accessToken);
     const role = decoded?.role ?? response.role;
     const safeNext = nextPath && nextPath.startsWith('/') ? nextPath : null;

@@ -22,6 +22,14 @@ export interface ApiClientConfig {
   baseUrl?: string;
   /** Async or sync function that returns the current bearer token */
   getToken?: GetTokenFn;
+  /**
+   * Called when a request receives a 401 and a refresh attempt should be made.
+   * Should refresh the access token and return the new token, or null if
+   * refresh failed (triggering logout).
+   */
+  onRefresh?: () => Promise<string | null>;
+  /** Called when refresh fails — use to redirect to login. */
+  onAuthExpired?: () => void;
 }
 
 export interface ApiError extends Error {
@@ -39,62 +47,104 @@ function createApiError(message: string, status: number): ApiError {
 // ─── Core client ──────────────────────────────────────────────────────────────
 
 export class ApiClient {
-  private baseUrl: string;
-  private getToken: GetTokenFn;
+  private baseUrl:       string;
+  private getToken:      GetTokenFn;
+  private onRefresh?:    () => Promise<string | null>;
+  private onAuthExpired?: () => void;
+  private refreshing:    boolean = false;
+  private refreshQueue:  Array<(token: string | null) => void> = [];
 
   constructor(config: ApiClientConfig = {}) {
-    this.baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
-    this.getToken = config.getToken ?? (() => null);
+    this.baseUrl       = config.baseUrl      ?? DEFAULT_BASE_URL;
+    this.getToken      = config.getToken     ?? (() => null);
+    this.onRefresh     = config.onRefresh;
+    this.onAuthExpired = config.onAuthExpired;
   }
 
   private async buildHeaders(
     extra: Record<string, string> = {},
+    tokenOverride?: string,
   ): Promise<Record<string, string>> {
-    const token = await Promise.resolve(this.getToken());
+    const token = tokenOverride ?? await Promise.resolve(this.getToken());
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...extra,
     };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
+    if (token) headers['Authorization'] = `Bearer ${token}`;
     return headers;
   }
 
-  async get<T>(path: string): Promise<T> {
+  /**
+   * Handles a 401 response: attempts token refresh once, queuing concurrent
+   * requests so only one refresh call is made at a time.
+   * Returns the new token, or null if refresh failed.
+   */
+  private async handleUnauthorized(): Promise<string | null> {
+    if (!this.onRefresh) return null;
+
+    if (this.refreshing) {
+      // Queue this request until the in-flight refresh resolves
+      return new Promise<string | null>(resolve => {
+        this.refreshQueue.push(resolve);
+      });
+    }
+
+    this.refreshing = true;
+    try {
+      const newToken = await this.onRefresh();
+      this.refreshQueue.forEach(resolve => resolve(newToken));
+      this.refreshQueue = [];
+      if (!newToken) this.onAuthExpired?.();
+      return newToken;
+    } finally {
+      this.refreshing = false;
+    }
+  }
+
+  /** Core fetch with automatic 401 → refresh → retry. */
+  private async request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    retried = false,
+  ): Promise<T> {
     const headers = await this.buildHeaders();
-    const res = await fetch(`${this.baseUrl}${path}`, { method: 'GET', headers });
+    const res = await fetch(`${this.baseUrl}${path}`, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+
+    if (res.status === 401 && !retried) {
+      const newToken = await this.handleUnauthorized();
+      if (newToken) {
+        // Retry once with the fresh token
+        const retryHeaders = await this.buildHeaders({}, newToken);
+        const retryRes = await fetch(`${this.baseUrl}${path}`, {
+          method,
+          headers: retryHeaders,
+          body: body !== undefined ? JSON.stringify(body) : undefined,
+        });
+        if (!retryRes.ok) {
+          throw createApiError(`${method} ${path} failed after refresh: ${retryRes.status}`, retryRes.status);
+        }
+        return retryRes.json() as Promise<T>;
+      }
+      // Refresh failed — throw 401 so callers can react
+      throw createApiError(`${method} ${path} unauthorized`, 401);
+    }
+
     if (!res.ok) {
-      throw createApiError(`GET ${path} failed: ${res.status}`, res.status);
+      throw createApiError(`${method} ${path} failed: ${res.status}`, res.status);
     }
     return res.json() as Promise<T>;
   }
 
-  async post<T>(path: string, body?: unknown): Promise<T> {
-    const headers = await this.buildHeaders();
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      method: 'POST',
-      headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
-    if (!res.ok) {
-      throw createApiError(`POST ${path} failed: ${res.status}`, res.status);
-    }
-    return res.json() as Promise<T>;
-  }
-
-  async put<T>(path: string, body?: unknown): Promise<T> {
-    const headers = await this.buildHeaders();
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      method: 'PUT',
-      headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
-    if (!res.ok) {
-      throw createApiError(`PUT ${path} failed: ${res.status}`, res.status);
-    }
-    return res.json() as Promise<T>;
-  }
+  async get<T>(path: string): Promise<T>                    { return this.request<T>('GET',    path); }
+  async post<T>(path: string, body?: unknown): Promise<T>   { return this.request<T>('POST',   path, body); }
+  async put<T>(path: string, body?: unknown): Promise<T>    { return this.request<T>('PUT',    path, body); }
+  async patch<T>(path: string, body?: unknown): Promise<T>  { return this.request<T>('PATCH',  path, body); }
+  async delete<T>(path: string): Promise<T>                 { return this.request<T>('DELETE', path); }
 }
 
 /** Shared singleton — configure once at app startup */

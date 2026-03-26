@@ -85,6 +85,31 @@ export function getCurrentUser(): DecodedToken | null {
   return getUserFromToken(token);
 }
 
+// ─── Refresh token storage (localStorage — not cookie, not httpOnly) ─────────
+
+const REFRESH_KEY = 'preventia_refresh_token';
+
+export function setRefreshToken(token: string): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(REFRESH_KEY, token);
+}
+
+export function getRefreshToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem(REFRESH_KEY);
+}
+
+export function clearRefreshToken(): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem(REFRESH_KEY);
+}
+
+/** Full logout — clears both the access token cookie and the refresh token. */
+export function clearSession(): void {
+  clearToken();
+  clearRefreshToken();
+}
+
 // ─── Role → route mapping ─────────────────────────────────────────────────────
 
 export function getDefaultRouteForRole(role: string): string {

@@ -62,6 +62,14 @@ public class User {
     @Column(name = "apple_subject", length = 255)
     private String appleSubject;
 
+    /** Doctor's consultation fee in INR. Null for non-doctor roles. */
+    @Column(name = "hourly_rate_inr")
+    private Integer hourlyRateInr;
+
+    /** Whether this doctor is currently accepting new appointments. */
+    @Column(name = "accepting_patients")
+    private Boolean acceptingPatients;
+
     public enum Role {
         /** Indian parent/elder receiving care — formerly PATIENT */
         RECIPIENT,
@@ -97,4 +105,9 @@ public class User {
     public void setGoogleSubject(String googleSubject) { this.googleSubject = googleSubject; }
     public String getAppleSubject() { return appleSubject; }
     public void setAppleSubject(String appleSubject) { this.appleSubject = appleSubject; }
+
+    public Integer getHourlyRateInr()       { return hourlyRateInr; }
+    public void setHourlyRateInr(Integer r) { this.hourlyRateInr = r; }
+    public Boolean getAcceptingPatients()          { return acceptingPatients; }
+    public void setAcceptingPatients(Boolean a)    { this.acceptingPatients = a; }
 }

@@ -2,7 +2,7 @@
 
 import React, { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getUserFromToken, setTokenCookie } from '@/lib/auth';
+import { getUserFromToken, setTokenCookie, setRefreshToken } from '@/lib/auth';
 
 interface LoginApiResponse {
   accessToken: string;
@@ -188,6 +188,7 @@ export default function AdminLoginPortal({ nextPath, loggedOut = false }: AdminL
       }
 
       setTokenCookie(data.accessToken, data.expiresInSeconds ?? 86400);
+      if (data.refreshToken) setRefreshToken(data.refreshToken);
       const safeNext = nextPath && nextPath.startsWith('/') ? nextPath : null;
       router.push(safeNext ?? '/admin');
     } catch (err) {

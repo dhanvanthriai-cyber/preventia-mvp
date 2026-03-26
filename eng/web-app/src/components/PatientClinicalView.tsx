@@ -10,6 +10,10 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
+import { getTokenFromCookie } from '@/lib/auth';
+
+const PatientTimeline = dynamic(() => import('./PatientTimeline'), { ssr: false });
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -235,54 +239,15 @@ function VaultTab({ patient }: Readonly<{ patient: PatientRecord }>) {
 }
 
 function HistoryTab({ patient }: Readonly<{ patient: PatientRecord }>) {
-  const history = patient.history ?? [
-    {
-      date: 'Feb 14, 2025',
-      type: 'TELECONSULT',
-      doctor: 'Dr. Arjun Mehta',
-      notes: 'Annual checkup. Adjusted Metformin dosage. Ordered lipid panel.',
-    },
-    {
-      date: 'Nov 20, 2024',
-      type: 'IN-PERSON',
-      doctor: 'Dr. Kavitha Rao',
-      notes: 'Follow-up for hypertension. BP controlled. Continue current regimen.',
-    },
-    {
-      date: 'Aug 8, 2024',
-      type: 'TELECONSULT',
-      doctor: 'Dr. Arjun Mehta',
-      notes: 'HbA1c review 6.8%. Dietary counselling provided.',
-    },
-    {
-      date: 'May 2, 2024',
-      type: 'EMERGENCY',
-      doctor: 'Dr. Priya Nair',
-      notes: 'Acute hyperglycaemia episode. IV fluids administered. Stable at discharge.',
-    },
-  ];
-
+  const token = getTokenFromCookie() ?? '';
   return (
     <div style={styles.section}>
-      <span style={styles.sectionLabel}>VISIT HISTORY</span>
-      {history.map((h) => (
-        <div key={`${h.date}-${h.doctor}`} style={styles.historyCard}>
-          <div style={styles.historyHeader}>
-            <span style={styles.historyDate}>{h.date}</span>
-            <span
-              style={{
-                ...styles.historyTypeBadge,
-                backgroundColor: h.type === 'EMERGENCY' ? '#CC0000' : '#000',
-              }}
-            >
-              {h.type}
-            </span>
-          </div>
-          <span style={styles.historyDoctor}>{h.doctor}</span>
-          <p style={styles.historyNotes}>{h.notes}</p>
-          <button style={styles.soapBtn}>VIEW SOAP NOTES</button>
-        </div>
-      ))}
+      <span style={styles.sectionLabel}>CONSULTATION TIMELINE</span>
+      <PatientTimeline
+        patientId={patient.id}
+        token={token}
+        role="DOCTOR"
+      />
     </div>
   );
 }

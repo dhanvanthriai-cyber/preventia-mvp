@@ -13,6 +13,7 @@ import {
 
 const ChatPanel = dynamic(() => import('./ChatPanel'), { ssr: false });
 const EmergencyButton = dynamic(() => import('./EmergencyButton'), { ssr: false });
+const PatientTimeline = dynamic(() => import('./PatientTimeline'), { ssr: false });
 
 interface Vital {
   label: string;
@@ -730,6 +731,16 @@ export default function PatientDashboard({ user }: Readonly<Props>) {
                 </div>
               );
             })()}
+          </DashCard>
+
+          {/* Care Timeline — live aggregated view of appointments, labs, prescriptions */}
+          <DashCard title="CARE TIMELINE" linkLabel="FULL HISTORY ›" linkHref="/patient/history">
+            <PatientTimeline
+              patientId={realUserId}
+              token={user.token ?? ''}
+              role="RECIPIENT"
+              compact
+            />
           </DashCard>
 
         </div>

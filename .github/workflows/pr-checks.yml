@@ -1,0 +1,71 @@
+# =============================================================================
+# PR Checks — fast feedback on pull requests
+#
+# Runs in parallel with ci-cd.yml on PRs.
+# Focused on developer experience: lint + type-check only, no Docker builds.
+# Results posted as PR checks within ~3 minutes.
+# =============================================================================
+
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      # Only trigger when relevant source files change
+      - 'eng/web-app/**'
+      - 'eng/shared/**'
+      - 'eng/mobile-app/**'
+      - 'eng/src/**'
+      - 'eng/pom.xml'
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  frontend-checks:
+    name: Frontend — Type-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            eng/shared/package-lock.json
+            eng/web-app/package-lock.json
+
+      - name: Build shared
+        working-directory: eng/shared
+        run: npm ci && npm run build
+
+      - name: Type-check web-app
+        working-directory: eng/web-app
+        run: npm ci && npm run type-check
+
+  backend-checks:
+    name: Backend — Compile
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Maven compile (no tests)
+        working-directory: eng
+        run: mvn compile -B -q
+        env:
+          JWT_SECRET:           ci-test-secret-at-least-32-chars-long
+          DAILY_API_KEY:        STUB
+          DAILY_WEBHOOK_SECRET: STUB

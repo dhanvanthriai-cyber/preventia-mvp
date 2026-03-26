@@ -1,0 +1,332 @@
+# =============================================================================
+# Preventia CI/CD — GitHub Actions
+#
+# MONOREPO LAYOUT:
+#   eng/                    ← build context root
+#   eng/src/                ← Spring Boot API source
+#   eng/web-app/            ← Next.js frontend
+#   eng/shared/             ← Shared TypeScript types + API client
+#   eng/mobile-app/         ← Expo (type-check only; no CI deploy)
+#   scripts/aws/deploy.sh   ← Reference deploy script (CI replicates this)
+#
+# JOBS:
+#   ci        — always runs: lint / type-check / unit tests (fast feedback)
+#   deploy-api — push to main only: build Spring Boot → ECR → App Runner
+#   deploy-web — push to main only: build Next.js  → ECR → App Runner
+#                (depends on deploy-api so API URL is stable before baking)
+#
+# REQUIRED GITHUB SECRETS:
+#   AWS_ACCESS_KEY_ID          — preventia-deploy IAM user
+#   AWS_SECRET_ACCESS_KEY      — preventia-deploy IAM user
+#   AWS_ACCOUNT_ID             — 246599827879
+#   AWS_REGION                 — ap-south-1
+#   NEXT_PUBLIC_API_BASE_URL   — https://<api-apprunner-url>  (stable after first deploy)
+#
+# OPTIONAL (if not set, services run in stub mode):
+#   JWT_SECRET / DAILY_API_KEY / STREAM_API_KEY etc are injected via
+#   AWS Secrets Manager at runtime — NOT needed as GitHub secrets.
+# =============================================================================
+
+name: CI / CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION:     ${{ secrets.AWS_REGION || 'ap-south-1' }}
+  AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID || '246599827879' }}
+  ECR_BASE:       ${{ secrets.AWS_ACCOUNT_ID || '246599827879' }}.dkr.ecr.${{ secrets.AWS_REGION || 'ap-south-1' }}.amazonaws.com
+
+# =============================================================================
+# JOB 1 — CI: type-check + tests (every push + every PR)
+# =============================================================================
+jobs:
+  ci:
+    name: CI — Type-check & Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Shared TypeScript package ──────────────────────────────────────────
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: eng/shared/package-lock.json
+
+      - name: Build shared package
+        working-directory: eng/shared
+        run: |
+          npm ci
+          npm run build
+
+      # ── Web App type-check ─────────────────────────────────────────────────
+      - name: Install web-app deps
+        working-directory: eng/web-app
+        run: npm ci
+
+      - name: Type-check web-app
+        working-directory: eng/web-app
+        run: npm run type-check
+
+      # ── Mobile App type-check (informational — not blocking) ───────────────
+      - name: Install mobile-app deps
+        working-directory: eng/mobile-app
+        run: npm ci --ignore-scripts
+        continue-on-error: true
+
+      - name: Type-check mobile-app
+        working-directory: eng/mobile-app
+        run: npm run type-check
+        continue-on-error: true   # mobile has pre-existing @preventia/shared resolution issues
+
+      # ── Spring Boot: compile + unit tests ─────────────────────────────────
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Maven compile + test
+        working-directory: eng
+        run: mvn verify -B -DskipITs
+        env:
+          # Minimal env so tests don't need real credentials
+          JWT_SECRET:         ci-test-secret-at-least-32-chars-long
+          DAILY_API_KEY:      STUB
+          DAILY_WEBHOOK_SECRET: STUB
+
+  # =============================================================================
+  # JOB 2 — Deploy API (main branch only)
+  # =============================================================================
+  deploy-api:
+    name: Deploy — Spring Boot API
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: ci
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image tag
+        id: tag
+        run: echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & push API image
+        uses: docker/build-push-action@v5
+        with:
+          context: eng
+          file:    eng/Dockerfile
+          push:    true
+          platforms: linux/amd64
+          build-args: |
+            CACHE_BUST=${{ github.run_id }}
+          tags: |
+            ${{ env.ECR_BASE }}/preventia/api:latest
+            ${{ env.ECR_BASE }}/preventia/api:${{ steps.tag.outputs.sha }}
+          cache-from: type=gha,scope=api
+          cache-to:   type=gha,scope=api,mode=max
+
+      - name: Trigger App Runner redeploy — API
+        run: |
+          SERVICE_ARN=$(aws apprunner list-services \
+            --region "$AWS_REGION" \
+            --query "ServiceSummaryList[?ServiceName=='preventia-api'].ServiceArn" \
+            --output text)
+
+          if [[ -z "$SERVICE_ARN" || "$SERVICE_ARN" == "None" ]]; then
+            echo "⚠ preventia-api App Runner service not found — skipping redeploy trigger"
+            exit 0
+          fi
+
+          echo "Triggering deployment for: $SERVICE_ARN"
+          aws apprunner start-deployment \
+            --service-arn "$SERVICE_ARN" \
+            --region "$AWS_REGION"
+          echo "✓ API redeploy triggered"
+
+      - name: Wait for API to reach RUNNING
+        run: |
+          SERVICE_ARN=$(aws apprunner list-services \
+            --region "$AWS_REGION" \
+            --query "ServiceSummaryList[?ServiceName=='preventia-api'].ServiceArn" \
+            --output text)
+          if [[ -z "$SERVICE_ARN" || "$SERVICE_ARN" == "None" ]]; then exit 0; fi
+
+          echo "Waiting for preventia-api…"
+          for i in $(seq 1 30); do
+            STATUS=$(aws apprunner describe-service \
+              --service-arn "$SERVICE_ARN" \
+              --region "$AWS_REGION" \
+              --query 'Service.Status' \
+              --output text 2>/dev/null || echo "UNKNOWN")
+            echo "  [$i/30] Status: $STATUS"
+            if [[ "$STATUS" == "RUNNING" ]]; then
+              echo "✓ API is RUNNING"
+              exit 0
+            fi
+            if [[ "$STATUS" == "CREATE_FAILED" || "$STATUS" == "UPDATE_FAILED" ]]; then
+              echo "✗ API entered $STATUS"
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "⚠ Timed out waiting for API"
+          exit 1
+
+  # =============================================================================
+  # JOB 3 — Deploy Web (main branch only, after API is stable)
+  # =============================================================================
+  deploy-web:
+    name: Deploy — Next.js Web
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [ci, deploy-api]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image tag
+        id: tag
+        run: echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve API URL for image bake
+        id: api-url
+        run: |
+          # Prefer the secret if set, otherwise query App Runner live
+          if [[ -n "${{ secrets.NEXT_PUBLIC_API_BASE_URL }}" ]]; then
+            echo "url=${{ secrets.NEXT_PUBLIC_API_BASE_URL }}" >> "$GITHUB_OUTPUT"
+          else
+            RAW=$(aws apprunner list-services \
+              --region "$AWS_REGION" \
+              --query "ServiceSummaryList[?ServiceName=='preventia-api'].ServiceUrl" \
+              --output text 2>/dev/null || echo "")
+            if [[ -n "$RAW" && "$RAW" != "None" ]]; then
+              echo "url=https://${RAW}" >> "$GITHUB_OUTPUT"
+            else
+              echo "url=" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & push Web image
+        uses: docker/build-push-action@v5
+        with:
+          context: eng
+          file:    eng/Dockerfile.web
+          push:    true
+          platforms: linux/amd64
+          build-args: |
+            NEXT_PUBLIC_API_BASE_URL=${{ steps.api-url.outputs.url }}
+          tags: |
+            ${{ env.ECR_BASE }}/preventia/web:latest
+            ${{ env.ECR_BASE }}/preventia/web:${{ steps.tag.outputs.sha }}
+          cache-from: type=gha,scope=web
+          cache-to:   type=gha,scope=web,mode=max
+
+      - name: Trigger App Runner redeploy — Web
+        run: |
+          SERVICE_ARN=$(aws apprunner list-services \
+            --region "$AWS_REGION" \
+            --query "ServiceSummaryList[?ServiceName=='preventia-web'].ServiceArn" \
+            --output text)
+
+          if [[ -z "$SERVICE_ARN" || "$SERVICE_ARN" == "None" ]]; then
+            echo "⚠ preventia-web App Runner service not found — skipping"
+            exit 0
+          fi
+
+          aws apprunner start-deployment \
+            --service-arn "$SERVICE_ARN" \
+            --region "$AWS_REGION"
+          echo "✓ Web redeploy triggered"
+
+      - name: Wait for Web to reach RUNNING
+        run: |
+          SERVICE_ARN=$(aws apprunner list-services \
+            --region "$AWS_REGION" \
+            --query "ServiceSummaryList[?ServiceName=='preventia-web'].ServiceArn" \
+            --output text)
+          if [[ -z "$SERVICE_ARN" || "$SERVICE_ARN" == "None" ]]; then exit 0; fi
+
+          echo "Waiting for preventia-web…"
+          for i in $(seq 1 30); do
+            STATUS=$(aws apprunner describe-service \
+              --service-arn "$SERVICE_ARN" \
+              --region "$AWS_REGION" \
+              --query 'Service.Status' \
+              --output text 2>/dev/null || echo "UNKNOWN")
+            echo "  [$i/30] Status: $STATUS"
+            if [[ "$STATUS" == "RUNNING" ]]; then
+              echo "✓ Web is RUNNING"
+              exit 0
+            fi
+            if [[ "$STATUS" == "CREATE_FAILED" || "$STATUS" == "UPDATE_FAILED" ]]; then
+              echo "✗ Web entered $STATUS"
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "⚠ Timed out waiting for Web"
+          exit 1
+
+      - name: Post deployment URLs
+        if: success()
+        run: |
+          API_URL=$(aws apprunner list-services \
+            --region "$AWS_REGION" \
+            --query "ServiceSummaryList[?ServiceName=='preventia-api'].ServiceUrl" \
+            --output text 2>/dev/null || echo "unknown")
+          WEB_URL=$(aws apprunner list-services \
+            --region "$AWS_REGION" \
+            --query "ServiceSummaryList[?ServiceName=='preventia-web'].ServiceUrl" \
+            --output text 2>/dev/null || echo "unknown")
+          echo "### ✅ Deployment complete" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Service | URL |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---------|-----|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| API     | https://${API_URL} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Web     | https://${WEB_URL} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Commit  | ${{ github.sha }} |" >> "$GITHUB_STEP_SUMMARY"

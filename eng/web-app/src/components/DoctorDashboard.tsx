@@ -172,6 +172,9 @@ export default function DoctorDashboard({ user }: Readonly<Props>) {
   // Lifestyle insights feed
   const [insightsFeed, setInsightsFeed] = useState<InsightItem[]>([]);
 
+  // CHAT-004: Unread message badge
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
+
   // Hourly rate
   const [rate, setRate] = useState(2500);
   const [rateUpdated, setRateUpdated] = useState(false);
@@ -494,8 +497,34 @@ export default function DoctorDashboard({ user }: Readonly<Props>) {
           </DashCard>
 
           {/* In-Network Chat */}
-          <DashCard title="IN-NETWORK CHAT" action={<a href="/doctor/messages" style={{ ...textStyles.muted, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', textDecoration: 'none', color: webTheme.colors.accentStrong }}>FULL SCREEN ›</a>}>
-            <ChatPanel userName={doctorName} height={380} embedded allowedPeers={allowedPatientPeers} remoteComposeSearch allowThreadDelete />
+          <DashCard
+            title="IN-NETWORK CHAT"
+            action={
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {chatUnreadCount > 0 && (
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    minWidth: 20, height: 20, borderRadius: 999,
+                    backgroundColor: '#EF4444', color: '#fff',
+                    fontSize: 10, fontWeight: 700, fontFamily: webTheme.font.sans,
+                    padding: '0 5px',
+                  }}>
+                    {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
+                  </span>
+                )}
+                <a href="/doctor/messages" style={{ ...textStyles.muted, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', textDecoration: 'none', color: webTheme.colors.accentStrong }}>FULL SCREEN ›</a>
+              </div>
+            }
+          >
+            <ChatPanel
+              userName={doctorName}
+              height={380}
+              embedded
+              allowedPeers={allowedPatientPeers}
+              remoteComposeSearch
+              allowThreadDelete
+              onUnreadCountChange={setChatUnreadCount}
+            />
           </DashCard>
 
         </div>

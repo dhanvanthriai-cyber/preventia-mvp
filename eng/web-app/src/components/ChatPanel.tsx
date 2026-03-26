@@ -57,6 +57,11 @@ interface Props {
   readonly remoteComposeSearch?: boolean;
   /** allows inbox-style per-user thread deletion on dashboard/full-screen chat surfaces */
   readonly allowThreadDelete?: boolean;
+  /**
+   * CHAT-004: Called whenever the total unread message count changes.
+   * Allows parent components (e.g. DoctorDashboard) to render a badge.
+   */
+  readonly onUnreadCountChange?: (count: number) => void;
 }
 
 interface DeleteThreadOptions {
@@ -248,6 +253,7 @@ export default function ChatPanel({
   allowedPeers,
   remoteComposeSearch = false,
   allowThreadDelete = false,
+  onUnreadCountChange,
 }: Readonly<Props>) {
   const clientRef             = useRef<StreamChat | null>(null);
   const [streamUserId,   setStreamUserId]   = useState<string | null>(null);
@@ -274,6 +280,10 @@ export default function ChatPanel({
   const [queueComposeLoading, setQueueComposeLoading] = useState(false);
   const [queueComposeError, setQueueComposeError] = useState<string | null>(null);
   const [deletingChannelCid, setDeletingChannelCid] = useState<string | null>(null);
+
+  // CHAT-004: Track total unread count and surface it to the parent via callback
+  const [totalUnread, setTotalUnread] = useState(0);
+
   const isEmbeddedQueueMode = embedded && (queueFirst || !peerUserId);
   const allowedPeerOptions = (() => {
     const peerById = new Map<string, AllowedPeerOption>();
@@ -443,13 +453,26 @@ export default function ChatPanel({
       ) {
         void loadQueue(false);
       }
+
+      // CHAT-004: Track total unread count across all channels
+      if (
+        event.type === 'message.new' ||
+        event.type === 'notification.message_new' ||
+        event.type === 'message.read' ||
+        event.type === 'notification.mark_read'
+      ) {
+        const raw = client.user?.total_unread_count;
+        const count = typeof raw === 'number' ? raw : 0;
+        setTotalUnread(count);
+        onUnreadCountChange?.(count);
+      }
     });
 
     return () => {
       cancelled = true;
       subscription.unsubscribe();
     };
-  }, [isEmbeddedQueueMode, refreshQueuedChannels, streamUserId]);
+  }, [isEmbeddedQueueMode, onUnreadCountChange, refreshQueuedChannels, streamUserId]);
 
   useEffect(() => {
     if (!isComposeSearchOpen) return;
@@ -844,7 +867,9 @@ export default function ChatPanel({
                         <Window>
                           <MessageList Message={CustomMessage} disableDateSeparator={false} />
                           <UrgentToggleBar />
-                          <MessageInput />
+                          <MessageInput
+                            additionalTextareaProps={{ placeholder: peerUserId ? 'Describe your symptoms or attach a photo…' : 'Type a message…' }}
+                          />
                         </Window>
                       </Channel>
                     </div>
@@ -993,7 +1018,9 @@ export default function ChatPanel({
                       Message={CustomMessage}
                       disableDateSeparator={false}
                     />
-                    <MessageInput />
+                    <MessageInput
+                      additionalTextareaProps={{ placeholder: peerUserId ? 'Describe your symptoms or attach a photo…' : 'Type a message…' }}
+                    />
                   </Window>
                 </Channel>
               </div>
@@ -1027,7 +1054,9 @@ export default function ChatPanel({
                   <Window>
                     <MessageList Message={CustomMessage} />
                     <UrgentToggleBar />
-                    <MessageInput />
+                    <MessageInput
+                      additionalTextareaProps={{ placeholder: peerUserId ? 'Describe your symptoms or attach a photo…' : 'Type a message…' }}
+                    />
                   </Window>
                 </Channel>
               </div>

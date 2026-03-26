@@ -1,8 +1,11 @@
 package com.preventia.clinical.controller;
 
+import com.preventia.chat.service.ChatNotificationService;
 import com.preventia.clinical.domain.SoapNote;
 import com.preventia.clinical.repository.SoapNoteRepository;
 import com.preventia.shared.service.S3Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -38,16 +41,21 @@ import java.util.Map;
 @RestController
 public class PrescriptionController {
 
-    private final S3Service           s3Service;
-    private final SoapNoteRepository  soapNoteRepository;
-    private final JdbcTemplate        jdbc;
+    private static final Logger log = LoggerFactory.getLogger(PrescriptionController.class);
+
+    private final S3Service               s3Service;
+    private final SoapNoteRepository      soapNoteRepository;
+    private final JdbcTemplate            jdbc;
+    private final ChatNotificationService chatNotificationService;
 
     public PrescriptionController(S3Service s3Service,
                                   SoapNoteRepository soapNoteRepository,
-                                  JdbcTemplate jdbc) {
-        this.s3Service           = s3Service;
-        this.soapNoteRepository  = soapNoteRepository;
-        this.jdbc                = jdbc;
+                                  JdbcTemplate jdbc,
+                                  ChatNotificationService chatNotificationService) {
+        this.s3Service               = s3Service;
+        this.soapNoteRepository      = soapNoteRepository;
+        this.jdbc                    = jdbc;
+        this.chatNotificationService = chatNotificationService;
     }
 
     // -------------------------------------------------------------------------
@@ -269,6 +277,45 @@ public class PrescriptionController {
     public ResponseEntity<Void> clarify(@PathVariable Long id,
                                         @RequestBody Map<String, Object> body) {
         updateStatus(id, "AWAITING_CLARIFICATION", body, "CLARIFICATION_REQUESTED", null);
+        return ResponseEntity.ok().build();
+    }
+
+    // -------------------------------------------------------------------------
+    // Dispatch (CONSULT-002) — pharmacist marks prescription as dispatched
+    // -------------------------------------------------------------------------
+
+    /**
+     * CONSULT-002: Pharmacist marks a prescription as DISPATCHED.
+     * Sends a chat notification to the patient confirming dispatch.
+     *
+     * Body: { "pharmacistId": 42, "pharmacyName": "Preventia Pharmacy", "notes": "optional" }
+     */
+    @PostMapping("/api/v1/prescriptions/{id}/dispatch")
+    @PreAuthorize("hasRole('PHARMACIST')")
+    public ResponseEntity<Void> dispatch(@PathVariable Long id,
+                                         @RequestBody Map<String, Object> body) {
+        updateStatus(id, "DISPATCHED", body, "DISPATCHED", null);
+
+        // CONSULT-002: Notify patient via Stream Chat (best-effort)
+        try {
+            soapNoteRepository.findById(id).ifPresent(note -> {
+                String pharmacyName = (String) body.getOrDefault("pharmacyName", "Preventia Pharmacy");
+                String notes = (String) body.get("notes");
+                String medicationSummary = notes != null && !notes.isBlank()
+                    ? notes
+                    : "your prescription";
+                chatNotificationService.sendPrescriptionDispatchedToPatient(
+                    note.getDoctorId(),
+                    note.getPatientId(),
+                    medicationSummary,
+                    pharmacyName
+                );
+            });
+        } catch (Exception e) {
+            log.warn("[PrescriptionController] Failed to send dispatch notification for soapNote={}: {}",
+                id, e.getMessage());
+        }
+
         return ResponseEntity.ok().build();
     }
 

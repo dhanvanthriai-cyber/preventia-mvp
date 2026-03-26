@@ -372,6 +372,106 @@ public class ChatNotificationService {
     }
 
     // -------------------------------------------------------------------------
+    // SPRINT-09 CHAT-012: SOAP summary to patient on consultation lock
+    // -------------------------------------------------------------------------
+
+    /**
+     * CHAT-012: Send a post-consultation care summary to the patient's chat channel.
+     * Called when an appointment transitions to LOCKED (consultation ended).
+     *
+     * @param doctorId     the attending doctor's user ID
+     * @param recipientId  the patient's user ID
+     * @param doctorName   doctor's display name
+     * @param plan         SOAP Plan field — the patient-facing care instructions
+     * @param assessment   SOAP Assessment field — the diagnosis summary
+     */
+    public void sendSoapSummaryToPatient(Long doctorId, Long recipientId,
+                                          String doctorName, String plan, String assessment) {
+        if (isStub()) {
+            log.info("[ChatNotification] STUB — SOAP summary for doctor={} patient={}", doctorId, recipientId);
+            return;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("📋 *Post-Consultation Summary*\n");
+        sb.append("Dr. ").append(doctorName).append(" has completed your consultation.\n\n");
+
+        if (assessment != null && !assessment.isBlank()) {
+            sb.append("*Assessment:*\n").append(assessment.trim()).append("\n\n");
+        }
+        if (plan != null && !plan.isBlank()) {
+            sb.append("*Care Plan:*\n").append(plan.trim()).append("\n\n");
+        }
+        sb.append("Please follow the care plan and reach out if you have questions.");
+
+        sendSystemMessage(doctorId, recipientId, sb.toString());
+        log.info("[ChatNotification] SOAP summary sent for doctor={} patient={}", doctorId, recipientId);
+    }
+
+    // -------------------------------------------------------------------------
+    // SPRINT-09 CHAT-008: Lab result notification to patient
+    // -------------------------------------------------------------------------
+
+    /**
+     * CHAT-008: Notify the patient that their lab results are ready.
+     * Called when a Thyrocare webhook delivers a results_ready event.
+     *
+     * @param doctorId    the ordering doctor's user ID (used to resolve the chat channel)
+     * @param recipientId the patient's user ID
+     * @param testName    human-readable test name or panel description
+     * @param resultUrl   pre-signed S3 URL to the PDF result (nullable — if null, omit link)
+     */
+    public void sendLabResultToPatient(Long doctorId, Long recipientId,
+                                        String testName, String resultUrl) {
+        if (isStub()) {
+            log.info("[ChatNotification] STUB — lab result for doctor={} patient={}", doctorId, recipientId);
+            return;
+        }
+
+        String text = resultUrl != null && !resultUrl.isBlank()
+            ? String.format(
+                "🧪 *Lab Results Ready*\n\nYour results for *%s* are now available.\n\n📄 Download: %s\n\nPlease review with your doctor at your next consultation.",
+                testName, resultUrl)
+            : String.format(
+                "🧪 *Lab Results Ready*\n\nYour results for *%s* are now available. Your doctor will review them with you shortly.",
+                testName);
+
+        sendSystemMessage(doctorId, recipientId, text);
+        log.info("[ChatNotification] Lab result notification sent for patient={}", recipientId);
+    }
+
+    // -------------------------------------------------------------------------
+    // SPRINT-09 CONSULT-002: Prescription dispatched notification to patient
+    // -------------------------------------------------------------------------
+
+    /**
+     * CONSULT-002: Notify the patient that their prescription has been dispatched by the pharmacy.
+     *
+     * @param doctorId    the prescribing doctor's user ID (used to resolve the chat channel)
+     * @param recipientId the patient's user ID
+     * @param medicationSummary short description of the dispensed medication(s)
+     * @param pharmacyName      name of the dispensing pharmacy
+     */
+    public void sendPrescriptionDispatchedToPatient(Long doctorId, Long recipientId,
+                                                     String medicationSummary, String pharmacyName) {
+        if (isStub()) {
+            log.info("[ChatNotification] STUB — prescription dispatched for doctor={} patient={}", doctorId, recipientId);
+            return;
+        }
+
+        String pharmacy = (pharmacyName != null && !pharmacyName.isBlank()) ? pharmacyName : "the pharmacy";
+        String meds = (medicationSummary != null && !medicationSummary.isBlank()) ? medicationSummary : "your prescription";
+
+        String text = String.format(
+            "💊 *Prescription Dispatched*\n\n%s has been dispensed by %s and is on its way.\n\nMedications: %s\n\nPlease follow dosage instructions provided by your doctor.",
+            meds, pharmacy, meds
+        );
+
+        sendSystemMessage(doctorId, recipientId, text);
+        log.info("[ChatNotification] Prescription dispatch notification sent for patient={}", recipientId);
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 

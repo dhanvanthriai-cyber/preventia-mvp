@@ -1,12 +1,16 @@
 package com.preventia.lab.service;
 
+import com.preventia.appointment.repository.AppointmentRepository;
+import com.preventia.chat.service.ChatNotificationService;
 import com.preventia.lab.domain.LabOrder;
 import com.preventia.lab.domain.LabOrderStatus;
 import com.preventia.lab.dto.CreateLabOrderRequest;
 import com.preventia.lab.dto.LabOrderResponse;
 import com.preventia.lab.repository.LabOrderRepository;
+import com.preventia.shared.service.S3Service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,13 +35,25 @@ public class LabOrderService {
     /** Safe upper bound for cold chain samples in °C (CPCB/ICMR guideline). */
     private static final float COLD_CHAIN_MAX_TEMP_CELSIUS = 8.0f;
 
-    private final LabOrderRepository labOrderRepository;
-    private final ThyrocareApiService thyrocareApiService;
+    private final LabOrderRepository     labOrderRepository;
+    private final ThyrocareApiService    thyrocareApiService;
+    private final AppointmentRepository  appointmentRepository;
+    private final ChatNotificationService chatNotificationService;
+    private final S3Service              s3Service;
+
+    @Value("${app.portal-url:https://app.preventia.ai}")
+    private String portalUrl;
 
     public LabOrderService(LabOrderRepository labOrderRepository,
-                           ThyrocareApiService thyrocareApiService) {
-        this.labOrderRepository = labOrderRepository;
-        this.thyrocareApiService = thyrocareApiService;
+                           ThyrocareApiService thyrocareApiService,
+                           AppointmentRepository appointmentRepository,
+                           ChatNotificationService chatNotificationService,
+                           S3Service s3Service) {
+        this.labOrderRepository      = labOrderRepository;
+        this.thyrocareApiService     = thyrocareApiService;
+        this.appointmentRepository   = appointmentRepository;
+        this.chatNotificationService = chatNotificationService;
+        this.s3Service               = s3Service;
     }
 
     // -------------------------------------------------------------------------
@@ -116,6 +132,33 @@ public class LabOrderService {
                 }
                 log.info("Lab order RESULTED — id={}, externalOrderId={}, pdfKey={}",
                         order.getId(), externalOrderId, pdfKey);
+
+                // CHAT-008: Notify patient via Stream Chat (best-effort)
+                try {
+                    final LabOrder finalOrder = order;
+                    appointmentRepository.findById(finalOrder.getAppointmentId()).ifPresent(appt -> {
+                        String resultUrl = null;
+                        if (pdfKey != null) {
+                            try {
+                                resultUrl = s3Service.generatePresignedUrl(pdfKey);
+                            } catch (Exception ex) {
+                                log.warn("[LabOrderService] Could not generate presigned URL for pdfKey={}: {}", pdfKey, ex.getMessage());
+                            }
+                        }
+                        String testName = finalOrder.getLabPartner() != null
+                            ? finalOrder.getLabPartner().name() + " Panel"
+                            : "Lab Panel";
+                        chatNotificationService.sendLabResultToPatient(
+                            appt.getDoctorId(),
+                            appt.getRecipientId(),
+                            testName,
+                            resultUrl
+                        );
+                    });
+                } catch (Exception e) {
+                    log.warn("[LabOrderService] Failed to send lab result notification for order={}: {}",
+                        order.getId(), e.getMessage());
+                }
             }
             default -> log.warn("Unrecognised Thyrocare webhook event '{}' for externalOrderId={}",
                     event, externalOrderId);

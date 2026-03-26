@@ -8,6 +8,7 @@ import com.preventia.appointment.dto.DailyRoomProvisionResult;
 import com.preventia.appointment.repository.AppointmentRepository;
 import com.preventia.auth.repository.UserRepository;
 import com.preventia.chat.service.ChatNotificationService;
+import com.preventia.clinical.repository.SoapNoteRepository;
 import com.preventia.family.domain.User;
 import com.preventia.insights.service.InsightsChannelService;
 import jakarta.persistence.EntityNotFoundException;
@@ -39,17 +40,20 @@ public class AppointmentService {
     private final UserRepository          userRepository;
     private final ChatNotificationService chatNotificationService;
     private final InsightsChannelService  insightsChannelService;
+    private final SoapNoteRepository      soapNoteRepository;
 
     public AppointmentService(AppointmentRepository appointmentRepository,
                               DailyRoomService dailyRoomService,
                               UserRepository userRepository,
                               ChatNotificationService chatNotificationService,
-                              InsightsChannelService insightsChannelService) {
+                              InsightsChannelService insightsChannelService,
+                              SoapNoteRepository soapNoteRepository) {
         this.appointmentRepository    = appointmentRepository;
         this.dailyRoomService         = dailyRoomService;
         this.userRepository           = userRepository;
         this.chatNotificationService  = chatNotificationService;
         this.insightsChannelService   = insightsChannelService;
+        this.soapNoteRepository       = soapNoteRepository;
     }
 
     // -------------------------------------------------------------------------
@@ -231,6 +235,29 @@ public class AppointmentService {
     public AppointmentResponse lockAppointment(Long appointmentId) {
         Appointment appointment = findOrThrow(appointmentId);
         appointment.setStatus(AppointmentStatus.LOCKED);
+
+        // CHAT-012: Send SOAP summary to patient on consultation lock (best-effort)
+        try {
+            soapNoteRepository.findByAppointmentId(appointmentId)
+                .stream()
+                .findFirst()
+                .ifPresent(note -> {
+                    String doctorName = appointment.getDoctorName() != null
+                        ? appointment.getDoctorName()
+                        : userRepository.findById(appointment.getDoctorId())
+                            .map(User::getName).orElse("Your Doctor");
+                    chatNotificationService.sendSoapSummaryToPatient(
+                        appointment.getDoctorId(),
+                        appointment.getRecipientId(),
+                        doctorName,
+                        note.getPlan(),
+                        note.getAssessment()
+                    );
+                });
+        } catch (Exception e) {
+            log.warn("[AppointmentService] Failed to send SOAP summary for appt={}: {}", appointmentId, e.getMessage());
+        }
+
         return toResponse(appointment, null);
     }
 

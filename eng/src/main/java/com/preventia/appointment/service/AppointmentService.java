@@ -9,6 +9,7 @@ import com.preventia.appointment.repository.AppointmentRepository;
 import com.preventia.auth.repository.UserRepository;
 import com.preventia.chat.service.ChatNotificationService;
 import com.preventia.family.domain.User;
+import com.preventia.insights.service.InsightsChannelService;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,19 +34,22 @@ import java.util.stream.Collectors;
 @Transactional
 public class AppointmentService {
 
-    private final AppointmentRepository  appointmentRepository;
-    private final DailyRoomService       dailyRoomService;
-    private final UserRepository         userRepository;
+    private final AppointmentRepository   appointmentRepository;
+    private final DailyRoomService        dailyRoomService;
+    private final UserRepository          userRepository;
     private final ChatNotificationService chatNotificationService;
+    private final InsightsChannelService  insightsChannelService;
 
     public AppointmentService(AppointmentRepository appointmentRepository,
                               DailyRoomService dailyRoomService,
                               UserRepository userRepository,
-                              ChatNotificationService chatNotificationService) {
+                              ChatNotificationService chatNotificationService,
+                              InsightsChannelService insightsChannelService) {
         this.appointmentRepository    = appointmentRepository;
         this.dailyRoomService         = dailyRoomService;
         this.userRepository           = userRepository;
         this.chatNotificationService  = chatNotificationService;
+        this.insightsChannelService   = insightsChannelService;
     }
 
     // -------------------------------------------------------------------------
@@ -132,6 +136,18 @@ public class AppointmentService {
             request.doctorName(),
             request.startTime()
         );
+
+        // Step 5: Auto-enroll patient in doctor's insights channel so they receive
+        // all future lifestyle insight broadcasts from this doctor (Sprint-11)
+        try {
+            insightsChannelService.addPatientToInsightsChannel(
+                request.doctorId(),
+                request.recipientId()
+            );
+        } catch (Exception e) {
+            log.warn("[AppointmentService] Failed to enroll patient={} in insights channel for doctor={}: {}",
+                request.recipientId(), request.doctorId(), e.getMessage());
+        }
 
         return toResponse(saved, room);
     }

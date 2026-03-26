@@ -213,6 +213,18 @@ function DashCard({ title, linkLabel, linkHref, children }: CardProps) {
   );
 }
 
+interface InsightItem {
+  id: number;
+  doctorId: number;
+  doctorName?: string;
+  category: string;
+  title: string;
+  body: string;
+  createdAt: string;
+  likeCount: number;
+  likedByMe: boolean;
+}
+
 interface Props {
   user?: AuthUser;
 }
@@ -234,6 +246,9 @@ export default function PatientDashboard({ user }: Readonly<Props>) {
   const [payments, setPayments] = useState<PaymentData[]>([]);
   const [prescriptionRecords, setPrescriptionRecords] = useState<PrescriptionRecord[]>([]);
   const [clinicalLoading, setClinicalLoading] = useState(true);
+
+  // Doctor lifestyle insights feed
+  const [doctorInsights, setDoctorInsights] = useState<InsightItem[]>([]);
 
   const patientName = user?.name ?? 'Patient';
   const nameParts = patientName.split(' ');
@@ -311,6 +326,18 @@ export default function PatientDashboard({ user }: Readonly<Props>) {
       document.removeEventListener('visibilitychange', refreshAppointments);
     };
   }, [fetchAppointments, realUserId, user]);
+
+  // Load doctor insights feed
+  useEffect(() => {
+    if (!user?.token) return;
+    fetch('/api/v1/insights', {
+      headers: { Authorization: `Bearer ${user.token}` },
+      credentials: 'include',
+    })
+      .then((res) => res.ok ? res.json() as Promise<InsightItem[]> : Promise.resolve([]))
+      .then((data) => setDoctorInsights(data))
+      .catch(() => {});
+  }, [user?.token]);
 
   if (!user) {
     return (
@@ -482,13 +509,29 @@ export default function PatientDashboard({ user }: Readonly<Props>) {
             })()}
           </DashCard>
 
-          {/* Health Insights Card */}
-          <DashCard title="HEALTH INSIGHTS" linkLabel="NEWSROOM ›" linkHref="/patient/news">
-            <div style={{ ...surface({ padding: 14, backgroundColor: webTheme.colors.surfaceAlt, boxShadow: 'none' }), display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <span style={{ ...pill('success'), fontSize: 9, alignSelf: 'flex-start' }}>NEW RESEARCH</span>
-              <p style={{ ...textStyles.label, margin: 0, fontSize: 13 }}>ADVANCED GLUCOSE MONITORING TECHNIQUES</p>
-              <a href="#" style={{ ...cardLinkStyle, color: webTheme.colors.accentStrong }}>READ FULL ARTICLE →</a>
-            </div>
+          {/* Health Insights Card — live doctor-broadcast insights */}
+          <DashCard title="HEALTH INSIGHTS" linkLabel="VIEW ALL ›" linkHref="/patient/insights">
+            {doctorInsights.length === 0 ? (
+              <div style={{ ...surface({ padding: 14, backgroundColor: webTheme.colors.surfaceAlt, boxShadow: 'none' }), display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <span style={{ ...pill('success'), fontSize: 9, alignSelf: 'flex-start' }}>TIP</span>
+                <p style={{ ...textStyles.muted, margin: 0, fontSize: 12 }}>Your doctor's health tips will appear here once they post lifestyle insights.</p>
+                <a href="/patient/news" style={{ ...cardLinkStyle, color: webTheme.colors.accentStrong }}>BROWSE NEWSROOM →</a>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {doctorInsights.slice(0, 2).map((item) => (
+                  <div key={item.id} style={{ ...surface({ padding: 14, backgroundColor: webTheme.colors.surfaceAlt, boxShadow: 'none' }), display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ ...pill('success'), fontSize: 9, padding: '3px 7px' }}>{item.category.replace('_', ' ')}</span>
+                      {item.doctorName && <span style={{ ...textStyles.muted, fontSize: 10 }}>Dr. {item.doctorName}</span>}
+                    </div>
+                    <p style={{ ...textStyles.label, margin: 0, fontSize: 12 }}>{item.title}</p>
+                    <p style={{ ...textStyles.muted, margin: 0, fontSize: 11, lineHeight: '16px' }}>{item.body.slice(0, 100)}{item.body.length > 100 ? '…' : ''}</p>
+                    <a href="/patient/insights" style={{ ...cardLinkStyle, color: webTheme.colors.accentStrong, fontSize: 11 }}>READ MORE →</a>
+                  </div>
+                ))}
+              </div>
+            )}
           </DashCard>
 
         </div>

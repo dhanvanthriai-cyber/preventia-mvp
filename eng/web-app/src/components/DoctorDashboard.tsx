@@ -24,20 +24,15 @@ function isMissedAppointment(appointment: Appointment, now = Date.now()) {
   return appointment.status === 'SCHEDULED' && new Date(appointment.endTime).getTime() < now;
 }
 
-const MOCK_FEED = [
-  {
-    id: 1,
-    category: 'Nourishment',
-    title: 'VITAMIN D AND IMMUNE SUPPORT',
-    body: 'A short read for patients who spend limited time outdoors and need a simpler explanation of lab-driven supplementation.',
-  },
-  {
-    id: 2,
-    category: 'Mindset',
-    title: 'HYPERTENSION FOLLOW-UP NOTES',
-    body: 'A concise, patient-friendly summary for shared care planning across telehealth and pharmacy touchpoints.',
-  },
-];
+interface InsightItem {
+  id: number;
+  category: string;
+  title: string;
+  body: string;
+  createdAt: string;
+  likeCount: number;
+  likedByMe: boolean;
+}
 
 const shellStyle: React.CSSProperties = {
   width: '100%',
@@ -171,6 +166,11 @@ export default function DoctorDashboard({ user }: Readonly<Props>) {
   const [insightTitle, setInsightTitle] = useState('');
   const [insightBody, setInsightBody] = useState('');
   const [insightSuccess, setInsightSuccess] = useState(false);
+  const [insightError, setInsightError] = useState('');
+  const [insightLoading, setInsightLoading] = useState(false);
+
+  // Lifestyle insights feed
+  const [insightsFeed, setInsightsFeed] = useState<InsightItem[]>([]);
 
   // Hourly rate
   const [rate, setRate] = useState(2500);
@@ -302,7 +302,33 @@ export default function DoctorDashboard({ user }: Readonly<Props>) {
     } catch (e) { console.error('[DoctorDashboard] decline failed', e); }
   }, [fetchData, user?.token]);
 
+  const loadInsights = useCallback(async () => {
+    if (!user?.token) return;
+    try {
+      const res = await fetch('/api/v1/insights', {
+        headers: { Authorization: `Bearer ${user.token}` },
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const data = await res.json() as InsightItem[];
+        setInsightsFeed(data);
+      }
+    } catch {
+      // Non-fatal — feed stays empty
+    }
+  }, [user?.token]);
+
+  useEffect(() => {
+    void loadInsights();
+  }, [loadInsights]);
+
   const handlePostInsight = async () => {
+    if (!insightTitle.trim() || !insightBody.trim()) {
+      setInsightError('Title and body are required.');
+      return;
+    }
+    setInsightError('');
+    setInsightLoading(true);
     const payload = { category: insightCategory, title: insightTitle, body: insightBody };
     try {
       const res = await fetch('/api/v1/insights', {
@@ -314,16 +340,31 @@ export default function DoctorDashboard({ user }: Readonly<Props>) {
         setInsightSuccess(true);
         setInsightTitle('');
         setInsightBody('');
+        await loadInsights();
         setTimeout(() => setInsightSuccess(false), 4000);
       } else {
-        console.log('[DoctorDashboard] POST /api/v1/insights mock:', payload);
-        setInsightSuccess(true);
-        setTimeout(() => setInsightSuccess(false), 4000);
+        setInsightError('Could not post insight. Please try again.');
       }
     } catch {
-      console.log('[DoctorDashboard] POST /api/v1/insights mock:', payload);
-      setInsightSuccess(true);
-      setTimeout(() => setInsightSuccess(false), 4000);
+      setInsightError('Could not post insight. Please try again.');
+    } finally {
+      setInsightLoading(false);
+    }
+  };
+
+  const handleReactToInsight = async (insightId: number) => {
+    if (!user?.token) return;
+    try {
+      const res = await fetch(`/api/v1/insights/${insightId}/react`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` },
+        body: JSON.stringify({ reaction: 'like' }),
+      });
+      if (res.ok) {
+        await loadInsights();
+      }
+    } catch {
+      // Non-fatal
     }
   };
 
@@ -465,19 +506,24 @@ export default function DoctorDashboard({ user }: Readonly<Props>) {
           {/* Post New Insight */}
           <DashCard title="POST NEW INSIGHT">
             {insightSuccess && (
-              <div style={{ borderRadius: webTheme.radius.md, backgroundColor: '#EDF5EA', border: '1px solid rgba(126,154,119,0.2)', padding: '10px 14px', ...textStyles.muted, fontSize: 12, color: webTheme.colors.success }}>
-                Insight posted successfully!
+              <div style={{ borderRadius: webTheme.radius.md, backgroundColor: '#EDF5EA', border: '1px solid rgba(126,154,119,0.2)', padding: '10px 14px', ...textStyles.muted, fontSize: 12, color: webTheme.colors.success, marginBottom: 8 }}>
+                ✅ Insight broadcast to all your patients!
+              </div>
+            )}
+            {insightError && (
+              <div style={{ borderRadius: webTheme.radius.md, backgroundColor: '#FEF2F2', border: '1px solid rgba(239,68,68,0.2)', padding: '10px 14px', ...textStyles.muted, fontSize: 12, color: '#DC2626', marginBottom: 8 }}>
+                {insightError}
               </div>
             )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <label style={{ ...textStyles.label, fontSize: 11 }}>CATEGORY</label>
                 <select value={insightCategory} onChange={(e) => setInsightCategory(e.target.value)} style={{ ...inputStyle, fontSize: 13 }}>
-                  <option>Nourishment</option>
-                  <option>Mindset</option>
-                  <option>Movement</option>
-                  <option>Sleep</option>
-                  <option>General</option>
+                  <option value="NUTRITION">Nourishment</option>
+                  <option value="MENTAL_HEALTH">Mindset</option>
+                  <option value="FITNESS">Movement</option>
+                  <option value="SLEEP">Sleep</option>
+                  <option value="GENERAL">General</option>
                 </select>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -490,25 +536,47 @@ export default function DoctorDashboard({ user }: Readonly<Props>) {
               </div>
               <div style={{ display: 'flex', gap: 10 }}>
                 <button type="button" disabled style={{ ...outlinedBtn, opacity: 0.6 }}>ADD MEDIA</button>
-                <button type="button" style={blackFilledBtn} onClick={() => void handlePostInsight()}>POST TO FEED</button>
+                <button
+                  type="button"
+                  style={{ ...blackFilledBtn, opacity: insightLoading ? 0.7 : 1 }}
+                  onClick={() => void handlePostInsight()}
+                  disabled={insightLoading}
+                >
+                  {insightLoading ? 'BROADCASTING…' : 'BROADCAST TO PATIENTS'}
+                </button>
               </div>
             </div>
           </DashCard>
 
           {/* Lifestyle Insights Feed */}
-          <DashCard title="LIFESTYLE INSIGHTS">
+          <DashCard
+            title="LIFESTYLE INSIGHTS"
+            action={<span style={{ ...textStyles.muted, fontSize: 10, letterSpacing: '0.06em' }}>{insightsFeed.length} POST{insightsFeed.length !== 1 ? 'S' : ''}</span>}
+          >
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: 360, overflowY: 'auto' }}>
-              {MOCK_FEED.map((item) => (
-                <div key={item.id} style={{ ...surface({ padding: 14, backgroundColor: webTheme.colors.surfaceAlt, boxShadow: 'none' }), display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <span style={{ ...pill('success'), fontSize: 9, padding: '3px 7px', alignSelf: 'flex-start' }}>{item.category.toUpperCase()}</span>
-                  <span style={{ ...textStyles.label, fontSize: 12 }}>{item.title}</span>
-                  <span style={{ ...textStyles.muted, fontSize: 11 }}>{item.body}</span>
-                  <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-                    <button type="button" style={{ ...outlinedBtn, fontSize: 10, padding: '4px 10px' }}>LIKE ♥</button>
-                    <button type="button" style={{ ...outlinedBtn, fontSize: 10, padding: '4px 10px' }}>SHARE ↗</button>
+              {insightsFeed.length === 0 ? (
+                <p style={{ ...textStyles.muted, margin: 0, fontSize: 12 }}>No insights posted yet. Use the form above to broadcast your first tip to patients.</p>
+              ) : (
+                insightsFeed.map((item) => (
+                  <div key={item.id} style={{ ...surface({ padding: 14, backgroundColor: webTheme.colors.surfaceAlt, boxShadow: 'none' }), display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span style={{ ...pill('success'), fontSize: 9, padding: '3px 7px', alignSelf: 'flex-start' }}>{item.category.replace('_', ' ')}</span>
+                    <span style={{ ...textStyles.label, fontSize: 12 }}>{item.title}</span>
+                    <span style={{ ...textStyles.muted, fontSize: 11 }}>{item.body}</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                      <button
+                        type="button"
+                        style={{ ...outlinedBtn, fontSize: 10, padding: '4px 10px', ...(item.likedByMe ? { backgroundColor: webTheme.colors.surfaceAlt, borderColor: webTheme.colors.accentStrong } : {}) }}
+                        onClick={() => void handleReactToInsight(item.id)}
+                      >
+                        {item.likedByMe ? '♥ LIKED' : 'LIKE ♥'} {item.likeCount > 0 ? `(${item.likeCount})` : ''}
+                      </button>
+                      <span style={{ ...textStyles.muted, fontSize: 10 }}>
+                        {new Date(item.createdAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </DashCard>
 

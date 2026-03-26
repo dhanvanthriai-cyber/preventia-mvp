@@ -6,6 +6,7 @@
 CREATE TABLE lifestyle_insights (
     id                BIGSERIAL       PRIMARY KEY,
     doctor_id         BIGINT          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    doctor_name       VARCHAR(255),          -- Snapshot of doctor's display name at post time
     category          VARCHAR(50)     NOT NULL DEFAULT 'GENERAL',
     title             VARCHAR(255)    NOT NULL,
     body              TEXT            NOT NULL,

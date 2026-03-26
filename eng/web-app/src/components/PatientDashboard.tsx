@@ -217,12 +217,16 @@ interface Props {
   user?: AuthUser;
 }
 
+const APPOINTMENT_POLL_MS = 15000;
+
+function isMissedAppointment(appointment: Appointment, now = Date.now()) {
+  return appointment.status === 'SCHEDULED' && new Date(appointment.endTime).getTime() < now;
+}
+
 export default function PatientDashboard({ user }: Readonly<Props>) {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [appointmentLoading, setAppointmentLoading] = useState(true);
   const [realUserId, setRealUserId] = useState<number>(user?.userId ?? 0);
-  const [chatPeerUserId, setChatPeerUserId] = useState<string | null>(null);
-  const [chatPeerName, setChatPeerName] = useState<string>('Your Doctor');
 
   // Live clinical data state
   const [soapNotes, setSoapNotes] = useState<SoapNoteData[]>([]);
@@ -246,20 +250,6 @@ export default function PatientDashboard({ user }: Readonly<Props>) {
       .catch(() => {});
   }, [user?.token]);
 
-  useEffect(() => {
-    if (!user?.token) return;
-    fetch('/api/v1/chat/peer', {
-      headers: { Authorization: `Bearer ${user.token}` },
-      credentials: 'include',
-    })
-      .then((res) => (res.ok ? res.json() as Promise<{ peerUserId?: string; peerName?: string }> : Promise.reject(new Error(`HTTP ${res.status}`))))
-      .then((data) => {
-        if (data.peerUserId) setChatPeerUserId(data.peerUserId);
-        if (data.peerName) setChatPeerName(data.peerName);
-      })
-      .catch(() => {});
-  }, [user?.token]);
-
   // Live clinical data fetch
   useEffect(() => {
     if (!user?.token) { setClinicalLoading(false); return; }
@@ -280,8 +270,11 @@ export default function PatientDashboard({ user }: Readonly<Props>) {
       .finally(() => setClinicalLoading(false));
   }, [user?.token]);
 
-  const fetchAppointments = useCallback(async (uid: number) => {
-    if (!user || uid === 0) { setAppointmentLoading(false); return; }
+  const fetchAppointments = useCallback(async (uid: number, options?: { silent?: boolean }) => {
+    if (!user || uid === 0) {
+      if (!options?.silent) setAppointmentLoading(false);
+      return;
+    }
     try {
       const res = await fetch(`/api/v1/appointments?recipientId=${uid}`, {
         headers: { Authorization: `Bearer ${user.token}` },
@@ -290,7 +283,9 @@ export default function PatientDashboard({ user }: Readonly<Props>) {
     } catch {
       setAppointments([]);
     } finally {
-      setAppointmentLoading(false);
+      if (!options?.silent) {
+        setAppointmentLoading(false);
+      }
     }
   }, [user]);
 
@@ -299,15 +294,23 @@ export default function PatientDashboard({ user }: Readonly<Props>) {
   }, [realUserId, fetchAppointments]);
 
   useEffect(() => {
-    if (realUserId === 0) return;
-    const terminal = ['ACTIVE', 'COMPLETED', 'LOCKED'] as const;
-    const allDone = appointments.length > 0 && appointments.every((a) => (terminal as readonly string[]).includes(a.status));
-    const hasScheduled = appointments.some((a) => a.status === 'SCHEDULED');
-    const hasActive = appointments.some((a) => a.status === 'ACTIVE');
-    if ((!hasScheduled && !hasActive) || allDone) return;
-    const timer = setInterval(() => { void fetchAppointments(realUserId); }, 10_000);
-    return () => clearInterval(timer);
-  }, [realUserId, appointments, fetchAppointments]);
+    if (!user || realUserId === 0) return;
+
+    const refreshAppointments = () => {
+      if (document.visibilityState !== 'visible') return;
+      void fetchAppointments(realUserId, { silent: true });
+    };
+
+    const intervalId = window.setInterval(refreshAppointments, APPOINTMENT_POLL_MS);
+    window.addEventListener('focus', refreshAppointments);
+    document.addEventListener('visibilitychange', refreshAppointments);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', refreshAppointments);
+      document.removeEventListener('visibilitychange', refreshAppointments);
+    };
+  }, [fetchAppointments, realUserId, user]);
 
   if (!user) {
     return (
@@ -323,7 +326,13 @@ export default function PatientDashboard({ user }: Readonly<Props>) {
 
   const now = Date.now();
   const thirtyMin = 30 * 60 * 1000;
+  const liveAppointments = appointments.filter((appointment) => !isMissedAppointment(appointment, now));
+  const missedAppointments = appointments
+    .filter((appointment) => isMissedAppointment(appointment, now))
+    .sort((left, right) => new Date(right.startTime).getTime() - new Date(left.startTime).getTime())
+    .slice(0, 3);
   const joinableAppt = appointments.find((a) => {
+    if (isMissedAppointment(a, now)) return false;
     if (a.status === 'COMPLETED' || a.status === 'LOCKED') return false;
     if (!a.dailyRoomUrl) return false;
     if (a.status === 'ACTIVE') return true;
@@ -332,17 +341,25 @@ export default function PatientDashboard({ user }: Readonly<Props>) {
     return now >= start - thirtyMin && now <= end + thirtyMin;
   });
 
-  const nextAppt = appointments.find((a) => a.status === 'SCHEDULED' || a.status === 'ACTIVE');
-  const upcomingSessions = appointments
+  const nextAppt = liveAppointments
+    .filter((appointment) => appointment.status === 'SCHEDULED' || appointment.status === 'ACTIVE')
+    .sort((left, right) => new Date(left.startTime).getTime() - new Date(right.startTime).getTime())[0];
+  const upcomingSessions = liveAppointments
     .filter((a) => a.status === 'SCHEDULED' || a.status === 'ACTIVE')
+    .sort((left, right) => new Date(left.startTime).getTime() - new Date(right.startTime).getTime())
     .slice(0, 2);
-  const allowedDoctorPeerIds = Array.from(
-    new Set(
+  const allowedDoctorPeers = Array.from(
+    new Map(
       appointments
-        .map((appointment) => appointment.doctorId)
-        .filter((doctorId): doctorId is number => typeof doctorId === 'number')
-        .map(String),
-    ),
+        .filter((appointment): appointment is Appointment & { doctorId: number } => typeof appointment.doctorId === 'number')
+        .map((appointment) => [
+          String(appointment.doctorId),
+          {
+            id: String(appointment.doctorId),
+            name: appointment.doctorName ?? `Doctor #${appointment.doctorId}`,
+          },
+        ]),
+    ).values(),
   );
 
   const timeUntil = (iso: string): string => {
@@ -508,17 +525,39 @@ export default function PatientDashboard({ user }: Readonly<Props>) {
             )}
           </DashCard>
 
+          <DashCard title="MISSED APPOINTMENTS" linkLabel="FULL HISTORY ›" linkHref="/patient/history">
+            {missedAppointments.length === 0 ? (
+              <p style={{ ...textStyles.muted, margin: 0, fontSize: 12 }}>No missed appointments</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {missedAppointments.map((appt) => (
+                  <div key={appt.id} style={listRowStyle}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <span style={{ ...textStyles.label, fontSize: 11 }}>{appt.doctorName ?? `Doctor #${appt.doctorId}`}</span>
+                      <span style={{ ...textStyles.muted, fontSize: 10 }}>
+                        {new Date(appt.startTime).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })} · {new Date(appt.startTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                      <span style={{ ...pill('rose'), fontSize: 9, padding: '3px 7px' }}>MISSED</span>
+                      <a href={appt.doctorId != null ? `/patient/book?doctor=${appt.doctorId}` : '/patient/book'} style={{ ...outlinedBtn, fontSize: 9, padding: '4px 8px' }}>BOOK AGAIN</a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </DashCard>
+
           {/* Provider Chat Card */}
           <DashCard title="PROVIDER CHAT" linkLabel="FULL SCREEN CHAT ›" linkHref="/patient/messages">
             <div style={{ height: 260, overflow: 'hidden', borderRadius: webTheme.radius.md }}>
               <ChatPanel
                 userName={patientName}
                 height={280}
-                peerUserId={chatPeerUserId ?? undefined}
-                peerName={chatPeerName ?? undefined}
                 embedded
                 queueFirst
-                allowedPeerIds={allowedDoctorPeerIds}
+                allowedPeers={allowedDoctorPeers}
+                allowThreadDelete
               />
             </div>
           </DashCard>

@@ -249,7 +249,7 @@ export default function PatientBookAppointmentPage({ user }: Readonly<Props>) {
     <div style={pageStyle}>
       <section style={heroCardStyle}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, flex: 1, minWidth: 280 }}>
-          <a href="/patient" style={{ ...softButton('ghost'), alignSelf: 'flex-start', padding: 0 }}>
+          <a href="/patient/health" style={{ ...softButton('ghost'), alignSelf: 'flex-start', padding: 0 }}>
             ← Back to patient portal
           </a>
           <span style={{ ...pill('accent'), alignSelf: 'flex-start' }}>Book appointment</span>
@@ -277,7 +277,7 @@ export default function PatientBookAppointmentPage({ user }: Readonly<Props>) {
               <div style={textStyles.muted}>{formatDateTime(startDate)} to {formatDateTime(endDate)}</div>
             </div>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              <a href="/patient" style={softButton('accent')}>
+              <a href="/patient/health" style={softButton('accent')}>
                 Back to portal
               </a>
               {calendarUrl ? (

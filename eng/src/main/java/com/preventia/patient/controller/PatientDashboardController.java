@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -204,16 +205,24 @@ public class PatientDashboardController {
     @GetMapping("/consultation-history")
     public ResponseEntity<List<Map<String, Object>>> getConsultationHistory(Authentication auth) {
         Long patientId = resolvePatientId(auth);
+        OffsetDateTime now = OffsetDateTime.now();
 
-        List<Appointment> completed = appointmentRepository.findByRecipientId(patientId)
+        List<Appointment> historyAppointments = appointmentRepository.findByRecipientId(patientId)
                 .stream()
                 .filter(a -> a.getStatus() == AppointmentStatus.COMPLETED
-                          || a.getStatus() == AppointmentStatus.LOCKED)
+                          || a.getStatus() == AppointmentStatus.LOCKED
+                          || (a.getStatus() == AppointmentStatus.SCHEDULED
+                              && a.getEndTime() != null
+                              && a.getEndTime().isBefore(now)))
                 .sorted(Comparator.comparing(Appointment::getStartTime).reversed())
                 .toList();
 
         List<Map<String, Object>> result = new ArrayList<>();
-        for (Appointment appt : completed) {
+        for (Appointment appt : historyAppointments) {
+            boolean missed = appt.getStatus() == AppointmentStatus.SCHEDULED
+                    && appt.getEndTime() != null
+                    && appt.getEndTime().isBefore(now);
+
             Map<String, Object> entry = new LinkedHashMap<>();
             entry.put("appointmentId", appt.getId());
             entry.put("doctorId", appt.getDoctorId());
@@ -221,7 +230,7 @@ public class PatientDashboardController {
             entry.put("recipientName", appt.getRecipientName());
             entry.put("startTime", appt.getStartTime());
             entry.put("endTime", appt.getEndTime());
-            entry.put("status", appt.getStatus());
+            entry.put("status", missed ? "MISSED" : appt.getStatus());
 
             // Attach SOAP note if present (targeted lookup by appointmentId — avoids N+1)
             soapNoteRepository.findByAppointmentId(appt.getId())

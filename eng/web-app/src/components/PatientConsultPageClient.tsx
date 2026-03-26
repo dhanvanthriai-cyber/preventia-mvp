@@ -36,7 +36,7 @@ export default function PatientConsultPageClient({ appointmentId }: PatientConsu
   }, [fetchAppointment]);
 
   const handleLocked = useCallback(() => {
-    router.push('/patient?locked=1');
+    router.push('/patient/health?locked=1');
   }, [router]);
 
   const handleDoctorReady = useCallback(() => {

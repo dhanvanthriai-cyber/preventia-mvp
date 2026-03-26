@@ -12,6 +12,11 @@ import { webTheme } from '@/lib/designSystem';
 
 const ChatPanel = dynamic(() => import('./ChatPanel'), { ssr: false });
 
+interface AllowedPeerOption {
+  id: string;
+  name?: string;
+}
+
 interface FullScreenChatProps {
   /** Display name passed to Stream (shown as sender name) */
   userName?: string;
@@ -37,38 +42,46 @@ export default function FullScreenChat({
   peerUserId,
   peerName,
 }: FullScreenChatProps) {
-  const [allowedPeerIds, setAllowedPeerIds] = useState<string[]>([]);
+  const [allowedPeers, setAllowedPeers] = useState<AllowedPeerOption[]>([]);
 
   useEffect(() => {
     if (userId <= 0) {
-      setAllowedPeerIds([]);
+      setAllowedPeers([]);
       return;
     }
 
     let cancelled = false;
 
-    const loadAllowedPeerIds = async () => {
+    const loadAllowedPeers = async () => {
       try {
         const appointments = await getAppointments(roleLabel === 'Doctor' ? { doctorId: userId } : { recipientId: userId });
         if (cancelled) return;
 
-        const nextAllowedPeerIds = Array.from(
-          new Set(
+        const nextAllowedPeers = Array.from(
+          new Map(
             appointments
-              .map((appointment) => roleLabel === 'Doctor' ? appointment.recipientId : appointment.doctorId)
-              .filter((peerId): peerId is number => typeof peerId === 'number')
-              .map(String),
-          ),
+              .map((appointment) => roleLabel === 'Doctor'
+                ? {
+                    id: appointment.recipientId,
+                    name: appointment.recipientName ?? (typeof appointment.recipientId === 'number' ? `Patient #${appointment.recipientId}` : undefined),
+                  }
+                : {
+                    id: appointment.doctorId,
+                    name: appointment.doctorName ?? (typeof appointment.doctorId === 'number' ? `Doctor #${appointment.doctorId}` : undefined),
+                  })
+              .filter((peer): peer is { id: number; name: string | undefined } => typeof peer.id === 'number')
+              .map((peer) => [String(peer.id), { id: String(peer.id), name: peer.name }] as const),
+          ).values(),
         );
-        setAllowedPeerIds(nextAllowedPeerIds);
+        setAllowedPeers(nextAllowedPeers);
       } catch {
         if (!cancelled) {
-          setAllowedPeerIds([]);
+          setAllowedPeers([]);
         }
       }
     };
 
-    void loadAllowedPeerIds();
+    void loadAllowedPeers();
 
     return () => {
       cancelled = true;
@@ -94,7 +107,9 @@ export default function FullScreenChat({
             height={0}           /* height is overridden by flex fill via CSS */
             peerUserId={peerUserId}
             peerName={peerName}
-            allowedPeerIds={allowedPeerIds}
+            allowedPeers={allowedPeers}
+            remoteComposeSearch={roleLabel === 'Doctor'}
+            allowThreadDelete
             embedded={false}     /* show two-pane layout with channel list */
           />
         </div>

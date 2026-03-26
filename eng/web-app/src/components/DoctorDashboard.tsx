@@ -20,6 +20,10 @@ interface Props {
   user?: AuthUser;
 }
 
+function isMissedAppointment(appointment: Appointment, now = Date.now()) {
+  return appointment.status === 'SCHEDULED' && new Date(appointment.endTime).getTime() < now;
+}
+
 const MOCK_FEED = [
   {
     id: 1,
@@ -136,6 +140,7 @@ const avatarStyle: React.CSSProperties = {
 };
 
 const AUTO_JOIN_WINDOW_MS = 5 * 60 * 1000;
+const APPOINTMENT_POLL_MS = 15000;
 
 interface CardProps {
   title: string;
@@ -193,15 +198,20 @@ export default function DoctorDashboard({ user }: Readonly<Props>) {
       .catch(() => {});
   }, [user?.token]);
 
-  const fetchData = useCallback(async () => {
-    if (!user || realUserId === 0) { setLoading(false); return; }
+  const fetchData = useCallback(async (options?: { silent?: boolean }) => {
+    if (!user || realUserId === 0) {
+      if (!options?.silent) setLoading(false);
+      return;
+    }
     try {
       const data = await getAppointments({ doctorId: realUserId });
       setAppointments(data);
     } catch (error) {
       console.error('[DoctorDashboard]', error);
     } finally {
-      setLoading(false);
+      if (!options?.silent) {
+        setLoading(false);
+      }
     }
   }, [user, realUserId]);
 
@@ -209,8 +219,33 @@ export default function DoctorDashboard({ user }: Readonly<Props>) {
     void fetchData();
   }, [fetchData]);
 
-  const pendingRequests = appointments.filter((a) => a.status === 'SCHEDULED');
-  const upcomingFirst = appointments
+  useEffect(() => {
+    if (!user || realUserId === 0) return;
+
+    const refreshAppointments = () => {
+      if (document.visibilityState !== 'visible') return;
+      void fetchData({ silent: true });
+    };
+
+    const intervalId = window.setInterval(refreshAppointments, APPOINTMENT_POLL_MS);
+    window.addEventListener('focus', refreshAppointments);
+    document.addEventListener('visibilitychange', refreshAppointments);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', refreshAppointments);
+      document.removeEventListener('visibilitychange', refreshAppointments);
+    };
+  }, [fetchData, realUserId, user]);
+
+  const nowMs = Date.now();
+  const liveAppointments = appointments.filter((appointment) => !isMissedAppointment(appointment, nowMs));
+  const missedAppointments = appointments
+    .filter((appointment) => isMissedAppointment(appointment, nowMs))
+    .sort((left, right) => new Date(right.startTime).getTime() - new Date(left.startTime).getTime())
+    .slice(0, 4);
+  const pendingRequests = liveAppointments.filter((a) => a.status === 'SCHEDULED');
+  const upcomingFirst = liveAppointments
     .filter((a) => a.status === 'SCHEDULED' || a.status === 'ACTIVE')
     .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
     .slice(0, 3);
@@ -419,7 +454,7 @@ export default function DoctorDashboard({ user }: Readonly<Props>) {
 
           {/* In-Network Chat */}
           <DashCard title="IN-NETWORK CHAT" action={<a href="/doctor/messages" style={{ ...textStyles.muted, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', textDecoration: 'none', color: webTheme.colors.accentStrong }}>FULL SCREEN ›</a>}>
-            <ChatPanel userName={doctorName} height={380} embedded allowedPeers={allowedPatientPeers} />
+            <ChatPanel userName={doctorName} height={380} embedded allowedPeers={allowedPatientPeers} remoteComposeSearch allowThreadDelete />
           </DashCard>
 
         </div>
@@ -507,6 +542,29 @@ export default function DoctorDashboard({ user }: Readonly<Props>) {
                       <a href={`/doctor/consult/${appt.id}`} style={{ ...blackFilledBtn, fontSize: 10, padding: '6px 12px' }}>
                         {appt.status === 'ACTIVE' ? 'JOIN VIDEO' : 'OPEN CALL'}
                       </a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </DashCard>
+
+          <DashCard title="MISSED APPOINTMENTS">
+            {missedAppointments.length === 0 ? (
+              <p style={{ ...textStyles.muted, margin: 0, fontSize: 12 }}>No missed appointments</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {missedAppointments.map((appt) => (
+                  <div key={appt.id} style={listRowStyle}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <span style={{ ...textStyles.label, fontSize: 11 }}>{appt.recipientName ?? `Patient #${appt.recipientId ?? appt.id}`}</span>
+                      <span style={{ ...textStyles.muted, fontSize: 10 }}>
+                        {new Date(appt.startTime).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })} · {formatTime(appt.startTime)}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                      <span style={{ ...pill('rose'), fontSize: 9, padding: '3px 7px' }}>MISSED</span>
+                      <a href={`/doctor/patient/${appt.recipientId ?? appt.id}`} style={{ ...outlinedBtn, fontSize: 9, padding: '4px 8px' }}>VIEW PATIENT</a>
                     </div>
                   </div>
                 ))}

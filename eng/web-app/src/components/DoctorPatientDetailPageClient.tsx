@@ -119,7 +119,7 @@ export default function DoctorPatientDetailPageClient({ patientId }: DoctorPatie
   return (
     <PatientClinicalView
       patient={patient}
-      onBack={() => router.back()}
+      onBack={() => router.push('/doctor')}
       onJoinConsultation={(appointmentId) => router.push(`/doctor/consult/${appointmentId}`)}
       onEditRecords={(nextPatientId) => router.push(`/doctor/patient/${nextPatientId}/edit`)}
     />

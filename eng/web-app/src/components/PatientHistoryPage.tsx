@@ -75,9 +75,10 @@ const blackFilledBtn: React.CSSProperties = {
   whiteSpace: 'nowrap' as const,
 };
 
-function statusTone(status: string): 'success' | 'neutral' | 'gold' {
+function statusTone(status: string): 'success' | 'neutral' | 'gold' | 'rose' {
   if (status === 'COMPLETED') return 'success';
   if (status === 'LOCKED') return 'gold';
+  if (status === 'MISSED') return 'rose';
   return 'neutral';
 }
 
@@ -132,7 +133,7 @@ export default function PatientHistoryPage({ user }: Readonly<Props>) {
 
       {!loading && entries.length === 0 && (
         <div style={surface({ padding: 32, textAlign: 'center' as const })}>
-          <p style={{ ...textStyles.muted, margin: 0 }}>No completed consultations yet.</p>
+          <p style={{ ...textStyles.muted, margin: 0 }}>No appointment history yet.</p>
           <a href="/patient/book" style={{ ...blackFilledBtn, marginTop: 16, display: 'inline-flex' }}>
             Book Consultation
           </a>
@@ -180,6 +181,13 @@ export default function PatientHistoryPage({ user }: Readonly<Props>) {
                 {/* Expanded SOAP view */}
                 {isExpanded && (
                   <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 14, borderTop: `1px solid ${webTheme.colors.border}`, paddingTop: 20 }}>
+                    {entry.status === 'MISSED' && (
+                      <div style={surface({ padding: 16, backgroundColor: webTheme.colors.roseTint, boxShadow: 'none' })}>
+                        <p style={{ ...textStyles.body, margin: 0 }}>
+                          This consultation was missed and did not complete.
+                        </p>
+                      </div>
+                    )}
                     {entry.subjective && (
                       <div>
                         <span style={{ ...textStyles.eyebrow, display: 'block', marginBottom: 4 }}>Subjective</span>

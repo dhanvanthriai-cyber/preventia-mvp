@@ -53,6 +53,15 @@ interface Props {
   readonly allowedPeerIds?: string[];
   /** optional labeled peer list for mapped doctor/patient conversations */
   readonly allowedPeers?: ReadonlyArray<AllowedPeerOption>;
+  /** doctor-side fallback: search mapped patients via backend when local peers are unavailable */
+  readonly remoteComposeSearch?: boolean;
+  /** allows inbox-style per-user thread deletion on dashboard/full-screen chat surfaces */
+  readonly allowThreadDelete?: boolean;
+}
+
+interface DeleteThreadOptions {
+  clearActiveChannel?: () => void;
+  onDeleted?: () => void;
 }
 
 // ── CHAT-005: Urgent message custom components ────────────────────────────────
@@ -128,8 +137,38 @@ function ChannelSyncer({ channel }: { channel: StreamChannel | null }) {
   return null;
 }
 
+function getChannelId(channel: StreamChannel) {
+  if (typeof channel.id === 'string' && channel.id.trim().length > 0) return channel.id;
+  const [, fallbackId] = channel.cid.split(':', 2);
+  return fallbackId ?? '';
+}
+
+function getPeerMemberId(channel: StreamChannel, selfUserId: string | null) {
+  const statePeerMemberId = Object.values(channel.state.members ?? {}).find((member) => member.user?.id !== selfUserId)?.user?.id;
+  if (statePeerMemberId != null) return statePeerMemberId;
+
+  const channelId = getChannelId(channel);
+  if (!selfUserId || channelId.length === 0) return null;
+
+  const memberIds = channelId.split('__');
+  if (memberIds.length !== 2) return null;
+
+  const peerMemberId = memberIds.find((memberId) => memberId !== selfUserId);
+  return peerMemberId ?? null;
+}
+
 function getPeerMember(channel: StreamChannel, selfUserId: string | null) {
-  return Object.values(channel.state.members ?? {}).find((member) => member.user?.id !== selfUserId);
+  const statePeerMember = Object.values(channel.state.members ?? {}).find((member) => member.user?.id !== selfUserId);
+  if (statePeerMember != null) return statePeerMember;
+
+  const peerMemberId = getPeerMemberId(channel, selfUserId);
+  if (peerMemberId == null) return undefined;
+
+  return {
+    user: {
+      id: peerMemberId,
+    },
+  };
 }
 
 function getChannelDisplayName(channel: StreamChannel, selfUserId: string | null) {
@@ -140,7 +179,7 @@ function getChannelDisplayName(channel: StreamChannel, selfUserId: string | null
   const channelName = typeof channel.data?.name === 'string' ? channel.data.name.trim() : '';
   if (channelName) return channelName;
 
-  return peerMember?.user?.id ? `Patient ${peerMember.user.id}` : 'Conversation';
+  return peerMember?.user?.id ? `Contact ${peerMember.user.id}` : 'Conversation';
 }
 
 function getLastMessagePreview(channel: StreamChannel) {
@@ -164,6 +203,39 @@ function formatQueueTimestamp(channel: StreamChannel) {
     : timestamp.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
+function PortalThreadHeader({
+  selfUserId,
+  deletingChannelCid,
+  onDeleteThread,
+}: Readonly<{
+  selfUserId: string | null;
+  deletingChannelCid: string | null;
+  onDeleteThread: (channel: StreamChannel, options?: DeleteThreadOptions) => Promise<void>;
+}>) {
+  const { channel, setActiveChannel } = useChatContext();
+
+  if (!channel) return null;
+
+  const isDeleting = deletingChannelCid === channel.cid;
+
+  return (
+    <div style={styles.portalThreadHeader}>
+      <div style={styles.portalThreadHeaderCopy}>
+        <span style={styles.portalThreadHeaderTitle}>{getChannelDisplayName(channel, selfUserId)}</span>
+        <span style={styles.portalThreadHeaderSubtitle}>Conversation history</span>
+      </div>
+      <button
+        type="button"
+        style={styles.threadDeleteBtn}
+        disabled={isDeleting}
+        onClick={() => void onDeleteThread(channel, { clearActiveChannel: () => setActiveChannel(undefined) })}
+      >
+        {isDeleting ? 'Deleting…' : 'Delete Thread'}
+      </button>
+    </div>
+  );
+}
+
 export default function ChatPanel({
   userName,
   height = 420,
@@ -174,6 +246,8 @@ export default function ChatPanel({
   queueFirst = false,
   allowedPeerIds,
   allowedPeers,
+  remoteComposeSearch = false,
+  allowThreadDelete = false,
 }: Readonly<Props>) {
   const clientRef             = useRef<StreamChat | null>(null);
   const [streamUserId,   setStreamUserId]   = useState<string | null>(null);
@@ -199,6 +273,7 @@ export default function ChatPanel({
   const [queueComposeMessage, setQueueComposeMessage] = useState('');
   const [queueComposeLoading, setQueueComposeLoading] = useState(false);
   const [queueComposeError, setQueueComposeError] = useState<string | null>(null);
+  const [deletingChannelCid, setDeletingChannelCid] = useState<string | null>(null);
   const isEmbeddedQueueMode = embedded && (queueFirst || !peerUserId);
   const allowedPeerOptions = (() => {
     const peerById = new Map<string, AllowedPeerOption>();
@@ -226,7 +301,15 @@ export default function ChatPanel({
   const allowedPeerIdsKey = allowedPeerIds == null && allowedPeers == null
     ? null
     : allowedPeerOptions.map((peer) => peer.id).join('|');
+  const allowedPeerSearchKey = allowedPeerOptions
+    .map((peer) => `${peer.id}:${peer.name ?? ''}`)
+    .join('|');
   const normalizedQueueComposeQuery = queueComposePatientQuery.trim().toLowerCase();
+  const canSearchComposePeers = remoteComposeSearch || allowedPeerOptions.length > 0;
+  const isComposeSearchOpen = (
+    (isEmbeddedQueueMode && queueComposerOpen) ||
+    (!isEmbeddedQueueMode && composing)
+  );
 
   // ── Create or fetch a direct channel between self and peer ──────────────
   const openOrCreateChannel = useCallback(async (
@@ -251,8 +334,15 @@ export default function ChatPanel({
       ? null
       : new Set(allowedPeerIdsKey.length > 0 ? allowedPeerIdsKey.split('|') : []);
     if (allowedPeerSet == null) return channels;
+    const allowedChannelIdSet = new Set(
+      Array.from(allowedPeerSet, (peerId) => [selfId, peerId].sort().join('__')),
+    );
     return channels.filter((channel) => {
-      const allowedPeerId = getPeerMember(channel, selfId)?.user?.id;
+      const channelId = getChannelId(channel);
+      if (channelId.length > 0 && allowedChannelIdSet.has(channelId)) {
+        return true;
+      }
+      const allowedPeerId = getPeerMemberId(channel, selfId);
       return allowedPeerId != null && allowedPeerSet.has(allowedPeerId);
     });
   }, [allowedPeerIdsKey]);
@@ -362,9 +452,9 @@ export default function ChatPanel({
   }, [isEmbeddedQueueMode, refreshQueuedChannels, streamUserId]);
 
   useEffect(() => {
-    if (!queueComposerOpen || !isEmbeddedQueueMode || peerUserId) return;
+    if (!isComposeSearchOpen) return;
 
-    const selectedPeerLabel = (queueComposeSelectedPeer?.name ?? (queueComposeSelectedPeer != null ? `Patient #${queueComposeSelectedPeer.id}` : '')).trim().toLowerCase();
+    const selectedPeerLabel = (queueComposeSelectedPeer?.name ?? (queueComposeSelectedPeer != null ? `Contact #${queueComposeSelectedPeer.id}` : '')).trim().toLowerCase();
     if (queueComposeSelectedPeer != null && normalizedQueueComposeQuery === selectedPeerLabel) {
       setQueueComposeMatches([]);
       setQueueComposeSearching(false);
@@ -373,6 +463,26 @@ export default function ChatPanel({
     }
 
     if (normalizedQueueComposeQuery.length < 2) {
+      setQueueComposeMatches([]);
+      setQueueComposeSearching(false);
+      setQueueComposeSearchError(null);
+      return;
+    }
+
+    if (allowedPeerOptions.length > 0) {
+      const nextMatches = allowedPeerOptions
+        .filter((peer) => {
+          const haystack = `${peer.name ?? ''} ${peer.id}`.trim().toLowerCase();
+          return haystack.includes(normalizedQueueComposeQuery);
+        })
+        .slice(0, 8);
+      setQueueComposeMatches(nextMatches);
+      setQueueComposeSearching(false);
+      setQueueComposeSearchError(null);
+      return;
+    }
+
+    if (!remoteComposeSearch) {
       setQueueComposeMatches([]);
       setQueueComposeSearching(false);
       setQueueComposeSearchError(null);
@@ -425,11 +535,24 @@ export default function ChatPanel({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [isEmbeddedQueueMode, normalizedQueueComposeQuery, peerUserId, queueComposerOpen, queueComposePatientQuery, queueComposeSelectedPeer]);
+  }, [isComposeSearchOpen, normalizedQueueComposeQuery, queueComposePatientQuery, queueComposeSelectedPeer, allowedPeerSearchKey, remoteComposeSearch]);
 
-  // ── Doctor-side: start a new conversation by Stream userId ──────────────
+  const resetPatientSearch = useCallback(() => {
+    setQueueComposePatientQuery('');
+    setQueueComposeSelectedPeer(null);
+    setQueueComposeMatches([]);
+    setQueueComposeSearching(false);
+    setQueueComposeSearchError(null);
+  }, []);
+
+  // ── Doctor-side: start a new conversation via patient search ────────────
   const handleStartConversation = useCallback(async () => {
-    if (!clientRef.current || !streamUserId || !composeId.trim()) return;
+    if (!clientRef.current || !streamUserId) return;
+    const selectedPeer = queueComposeSelectedPeer;
+    if (!selectedPeer || !composeId.trim()) {
+      setComposeError('Search and select an in-network contact first.');
+      return;
+    }
     setComposeLoading(true);
     setComposeError(null);
     try {
@@ -437,24 +560,21 @@ export default function ChatPanel({
       setComposing(false);
       setComposeId('');
       setComposeName('');
+      resetPatientSearch();
     } catch (e) {
       setComposeError(e instanceof Error ? e.message : 'Failed to create channel');
     } finally {
       setComposeLoading(false);
     }
-  }, [clientRef, streamUserId, composeId, composeName, openOrCreateChannel]);
+  }, [clientRef, streamUserId, queueComposeSelectedPeer, composeId, composeName, openOrCreateChannel, resetPatientSearch]);
 
   const resetQueueComposer = useCallback(() => {
     setQueueComposerOpen(false);
-    setQueueComposePatientQuery('');
-    setQueueComposeSelectedPeer(null);
-    setQueueComposeMatches([]);
-    setQueueComposeSearching(false);
-    setQueueComposeSearchError(null);
+    resetPatientSearch();
     setQueueComposeMessage('');
     setQueueComposeLoading(false);
     setQueueComposeError(null);
-  }, []);
+  }, [resetPatientSearch]);
 
   const handleOpenQueuedChannel = useCallback((channel: StreamChannel) => {
     resetQueueComposer();
@@ -467,16 +587,67 @@ export default function ChatPanel({
   }, [resetQueueComposer]);
 
   const handleQueueComposerSelectPeer = useCallback((peer: AllowedPeerOption) => {
-    setQueueComposePatientQuery(peer.name ?? `Patient #${peer.id}`);
+    setQueueComposePatientQuery(peer.name ?? `Contact #${peer.id}`);
     setQueueComposeSelectedPeer(peer);
     setQueueComposeMatches([]);
     setQueueComposeError(null);
     setQueueComposeSearchError(null);
   }, []);
 
+  const handleComposeSelectPeer = useCallback((peer: AllowedPeerOption) => {
+    setQueueComposePatientQuery(peer.name ?? `Contact #${peer.id}`);
+    setQueueComposeSelectedPeer(peer);
+    setQueueComposeMatches([]);
+    setQueueComposeSearchError(null);
+    setComposeId(peer.id);
+    setComposeName(peer.name ?? '');
+    setComposeError(null);
+  }, []);
+
   const handleQueueComposerCancel = useCallback(() => {
     resetQueueComposer();
   }, [resetQueueComposer]);
+
+  const handleDeleteThread = useCallback(async (
+    channel: StreamChannel,
+    options?: DeleteThreadOptions,
+  ) => {
+    if (!streamUserId || deletingChannelCid != null) return;
+
+    const channelLabel = getChannelDisplayName(channel, streamUserId);
+    const confirmed = window.confirm(
+      `Delete the thread with ${channelLabel}? This clears it from your chat list for your account. New replies will reopen it.`,
+    );
+    if (!confirmed) return;
+
+    setDeletingChannelCid(channel.cid);
+    try {
+      await channel.hide(streamUserId, true);
+      if (isEmbeddedQueueMode && clientRef.current) {
+        await refreshQueuedChannels(clientRef.current, streamUserId, false);
+      }
+
+      if (activeChannel?.cid === channel.cid) {
+        setActiveChannel(null);
+      }
+
+      options?.clearActiveChannel?.();
+      options?.onDeleted?.();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Failed to delete thread';
+      window.alert(`Could not delete this thread. ${message}`);
+    } finally {
+      setDeletingChannelCid(null);
+    }
+  }, [activeChannel, deletingChannelCid, isEmbeddedQueueMode, refreshQueuedChannels, streamUserId]);
+
+  const FullScreenHeaderComponent = () => (
+    <PortalThreadHeader
+      selfUserId={streamUserId}
+      deletingChannelCid={deletingChannelCid}
+      onDeleteThread={handleDeleteThread}
+    />
+  );
 
   const handleQueueComposerSend = useCallback(async () => {
     if (!clientRef.current || !streamUserId) return;
@@ -485,7 +656,7 @@ export default function ChatPanel({
     const messageText = queueComposeMessage.trim();
 
     if (!peer) {
-      setQueueComposeError('Search and select an enrolled patient first.');
+      setQueueComposeError('Search and select an in-network contact first.');
       return;
     }
     if (messageText.length === 0) {
@@ -530,7 +701,13 @@ export default function ChatPanel({
   const channelRenderFilterFn = streamUserId == null
     ? undefined
     : (channels: StreamChannel[]) => filterChannelsByAllowedPeers(channels, streamUserId);
-  const canCreateMappedConversation = isEmbeddedQueueMode && !peerUserId && allowedPeerOptions.length > 0;
+  const canOpenQueueComposer = isEmbeddedQueueMode && canSearchComposePeers;
+  const fullScreenComposeOffset = !peerUserId && !isEmbeddedQueueMode && canSearchComposePeers
+    ? (composing ? 236 : 42)
+    : 0;
+  const twoPaneLayoutHeight = height > 0
+    ? height - (peerUserId ? 0 : fullScreenComposeOffset)
+    : (peerUserId ? '100%' : `calc(100% - ${fullScreenComposeOffset}px)`);
 
   return (
     <div className="dhv-chat-root" style={{ ...styles.chatRoot, minHeight: height }}>
@@ -546,36 +723,88 @@ export default function ChatPanel({
       <Chat client={clientRef.current} theme="str-chat__theme-light">
 
         {/* Doctor-side: NEW MESSAGE compose bar */}
-        {!peerUserId && !isEmbeddedQueueMode && (
-          <div style={styles.newMsgBar}>
+        {!peerUserId && !isEmbeddedQueueMode && canSearchComposePeers && (
+          <div style={{ ...styles.newMsgBar, ...(composing ? styles.newMsgBarExpanded : null) }}>
             {composing ? (
               <div style={styles.composeForm}>
-                <input
-                  style={styles.composeInput}
-                  placeholder="Peer's User ID (e.g. 2)"
-                  value={composeId}
-                  onChange={e => setComposeId(e.target.value)}
-                />
-                <input
-                  style={styles.composeInput}
-                  placeholder="Peer's name (optional)"
-                  value={composeName}
-                  onChange={e => setComposeName(e.target.value)}
-                />
+                <div style={styles.queueComposerField}>
+                  <input
+                    id="full-compose-patient"
+                    type="text"
+                    value={queueComposePatientQuery}
+                    placeholder="Search in-network contact"
+                    autoComplete="off"
+                    style={styles.queueComposerInput}
+                    onChange={(event) => {
+                      setQueueComposePatientQuery(event.target.value);
+                      setQueueComposeSelectedPeer(null);
+                      setQueueComposeMatches([]);
+                      setQueueComposeSearchError(null);
+                      setComposeId('');
+                      setComposeName('');
+                      setComposeError(null);
+                    }}
+                  />
+                  {queueComposeSelectedPeer && queueComposePatientQuery.trim() === (queueComposeSelectedPeer.name ?? `Contact #${queueComposeSelectedPeer.id}`) ? (
+                    <div style={styles.queueComposerHint}>
+                      Selected contact: <strong>{queueComposeSelectedPeer.name ?? `Contact #${queueComposeSelectedPeer.id}`}</strong>
+                    </div>
+                  ) : queueComposeSearching ? (
+                    <div style={styles.queueComposerHint}>Searching in-network contacts…</div>
+                  ) : queueComposeSearchError ? (
+                    <div style={styles.queueComposerError}>{queueComposeSearchError}</div>
+                  ) : queueComposeMatches.length > 0 ? (
+                    <div style={styles.queueComposerMatches}>
+                      {queueComposeMatches.map((peer) => (
+                        <button
+                          key={peer.id}
+                          type="button"
+                          style={styles.queueComposerMatchBtn}
+                          onClick={() => handleComposeSelectPeer(peer)}
+                        >
+                          <span style={styles.queueComposerMatchName}>{peer.name ?? `Contact #${peer.id}`}</span>
+                          <span style={styles.queueComposerMatchMeta}>in-network contact</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : normalizedQueueComposeQuery.length >= 2 ? (
+                    <div style={styles.queueComposerHint}>No in-network contacts match that name.</div>
+                  ) : (
+                    <div style={styles.queueComposerHint}>Enter at least 2 characters to search your in-network contacts.</div>
+                  )}
+                </div>
                 {composeError && <span style={styles.composeErr}>{composeError}</span>}
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button
                     style={styles.startBtn}
                     onClick={() => void handleStartConversation()}
-                    disabled={composeLoading || !composeId.trim()}
+                    disabled={composeLoading}
                   >
                     {composeLoading ? 'OPENING…' : 'OPEN CHAT'}
                   </button>
-                  <button style={styles.cancelBtn} onClick={() => setComposing(false)}>CANCEL</button>
+                  <button
+                    style={styles.cancelBtn}
+                    onClick={() => {
+                      setComposing(false);
+                      setComposeId('');
+                      setComposeName('');
+                      setComposeError(null);
+                      resetPatientSearch();
+                    }}
+                  >
+                    CANCEL
+                  </button>
                 </div>
               </div>
             ) : (
-              <button style={styles.newMsgBtn} onClick={() => setComposing(true)}>
+              <button
+                style={styles.newMsgBtn}
+                onClick={() => {
+                  setComposeError(null);
+                  resetPatientSearch();
+                  setComposing(true);
+                }}
+              >
                 + NEW MESSAGE
               </button>
             )}
@@ -590,13 +819,25 @@ export default function ChatPanel({
                 {activeChannel ? (
                   <div style={styles.embeddedThreadWrap}>
                     <div style={styles.embeddedThreadHeader}>
-                      <button type="button" style={styles.backBtn} onClick={handleBackToQueue}>
-                        ← Back
-                      </button>
-                      <div style={styles.threadTitleWrap}>
-                        <span style={styles.threadTitle}>{getChannelDisplayName(activeChannel, streamUserId)}</span>
-                        <span style={styles.threadSubtitle}>Conversation history</span>
+                      <div style={styles.embeddedThreadHeaderMain}>
+                        <button type="button" style={styles.backBtn} onClick={handleBackToQueue}>
+                          ← Back
+                        </button>
+                        <div style={styles.threadTitleWrap}>
+                          <span style={styles.threadTitle}>{getChannelDisplayName(activeChannel, streamUserId)}</span>
+                          <span style={styles.threadSubtitle}>Conversation history</span>
+                        </div>
                       </div>
+                      {allowThreadDelete && (
+                        <button
+                          type="button"
+                          style={styles.threadDeleteBtn}
+                          disabled={deletingChannelCid === activeChannel.cid}
+                          onClick={() => void handleDeleteThread(activeChannel, { onDeleted: handleBackToQueue })}
+                        >
+                          {deletingChannelCid === activeChannel.cid ? 'Deleting…' : 'Delete Thread'}
+                        </button>
+                      )}
                     </div>
                     <div style={styles.embeddedThreadBody}>
                       <Channel channel={activeChannel} Message={CustomMessage}>
@@ -616,7 +857,7 @@ export default function ChatPanel({
                           <span style={styles.queueHeading}>Previous Chats</span>
                         </div>
                         <div style={styles.queueHeaderActions}>
-                          {canCreateMappedConversation && (
+                          {canOpenQueueComposer && (
                             <button
                               type="button"
                               style={styles.queueActionBtn}
@@ -634,12 +875,12 @@ export default function ChatPanel({
                       {queueComposerOpen && (
                         <div style={styles.queueComposerCard}>
                           <div style={styles.queueComposerField}>
-                            <label htmlFor="queue-compose-patient" style={styles.queueComposerLabel}>Patient Name</label>
+                            <label htmlFor="queue-compose-patient" style={styles.queueComposerLabel}>Contact</label>
                             <input
                               id="queue-compose-patient"
                               type="text"
                               value={queueComposePatientQuery}
-                              placeholder="Search mapped patient"
+                              placeholder="Search in-network contact"
                               autoComplete="off"
                               style={styles.queueComposerInput}
                               onChange={(event) => {
@@ -649,12 +890,12 @@ export default function ChatPanel({
                                 setQueueComposeSearchError(null);
                               }}
                             />
-                            {queueComposeSelectedPeer && queueComposePatientQuery.trim() === (queueComposeSelectedPeer.name ?? `Patient #${queueComposeSelectedPeer.id}`) ? (
+                            {queueComposeSelectedPeer && queueComposePatientQuery.trim() === (queueComposeSelectedPeer.name ?? `Contact #${queueComposeSelectedPeer.id}`) ? (
                               <div style={styles.queueComposerHint}>
-                                Selected patient: <strong>{queueComposeSelectedPeer.name ?? `Patient #${queueComposeSelectedPeer.id}`}</strong>
+                                Selected contact: <strong>{queueComposeSelectedPeer.name ?? `Contact #${queueComposeSelectedPeer.id}`}</strong>
                               </div>
                             ) : queueComposeSearching ? (
-                              <div style={styles.queueComposerHint}>Searching enrolled patients…</div>
+                              <div style={styles.queueComposerHint}>Searching in-network contacts…</div>
                             ) : queueComposeSearchError ? (
                               <div style={styles.queueComposerError}>{queueComposeSearchError}</div>
                             ) : queueComposeMatches.length > 0 ? (
@@ -666,15 +907,15 @@ export default function ChatPanel({
                                     style={styles.queueComposerMatchBtn}
                                     onClick={() => handleQueueComposerSelectPeer(peer)}
                                   >
-                                    <span style={styles.queueComposerMatchName}>{peer.name ?? `Patient #${peer.id}`}</span>
-                                    <span style={styles.queueComposerMatchMeta}>mapped patient</span>
+                                    <span style={styles.queueComposerMatchName}>{peer.name ?? `Contact #${peer.id}`}</span>
+                                    <span style={styles.queueComposerMatchMeta}>in-network contact</span>
                                   </button>
                                 ))}
                               </div>
                             ) : normalizedQueueComposeQuery.length >= 2 ? (
-                              <div style={styles.queueComposerHint}>No enrolled patients match that name.</div>
+                              <div style={styles.queueComposerHint}>No in-network contacts match that name.</div>
                             ) : (
-                              <div style={styles.queueComposerHint}>Enter at least 2 characters to search enrolled patients.</div>
+                              <div style={styles.queueComposerHint}>Enter at least 2 characters to search your in-network contacts.</div>
                             )}
                           </div>
                           <div style={styles.queueComposerField}>
@@ -718,7 +959,7 @@ export default function ChatPanel({
                         {queueLoading ? (
                           <div style={styles.queueState}>Loading conversation queue…</div>
                         ) : queuedChannels.length === 0 ? (
-                          <div style={styles.queueState}>No mapped chats yet.</div>
+                          <div style={styles.queueState}>No mapped chats yet. Use New Message to start one.</div>
                         ) : (
                           queuedChannels.map((channel) => (
                             <button
@@ -763,7 +1004,7 @@ export default function ChatPanel({
           <>
             {/* Sync programmatically-opened channels (compose / peer-open) into Stream state */}
             <ChannelSyncer channel={activeChannel} />
-            <div style={{ ...styles.chatLayout, height: height - (peerUserId ? 0 : composing ? 130 : 42) }}>
+            <div style={{ ...styles.chatLayout, height: twoPaneLayoutHeight }}>
               <div style={styles.channelListPane}>
                 <ChannelList
                   filters={filters}
@@ -782,7 +1023,7 @@ export default function ChatPanel({
               </div>
               <div style={styles.channelPane}>
                 {/* No channel prop — Stream drives the active channel from list clicks */}
-                <Channel Message={CustomMessage}>
+                <Channel Message={CustomMessage} HeaderComponent={allowThreadDelete ? FullScreenHeaderComponent : undefined}>
                   <Window>
                     <MessageList Message={CustomMessage} />
                     <UrgentToggleBar />
@@ -1181,10 +1422,18 @@ const styles: Record<string, React.CSSProperties> = {
   embeddedThreadHeader: {
     display: 'flex',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 12,
     padding: '12px 14px',
     borderBottom: `1px solid ${webTheme.colors.border}`,
     backgroundColor: webTheme.colors.surfaceAlt,
+  },
+  embeddedThreadHeaderMain: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    minWidth: 0,
+    flex: 1,
   },
   backBtn: {
     border: `1px solid ${webTheme.colors.borderStrong}`,
@@ -1214,6 +1463,21 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 11,
     color: webTheme.colors.mutedText,
   },
+  threadDeleteBtn: {
+    border: `1px solid rgba(199, 131, 117, 0.32)`,
+    borderRadius: 999,
+    backgroundColor: webTheme.colors.roseTint,
+    color: webTheme.colors.rose,
+    padding: '8px 12px',
+    fontFamily: webTheme.font.sans,
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: '0.05em',
+    textTransform: 'uppercase',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+    flexShrink: 0,
+  },
   embeddedThreadBody: {
     flex: 1,
     minHeight: 0,
@@ -1226,10 +1490,38 @@ const styles: Record<string, React.CSSProperties> = {
   channelPane:     { flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' },
   // New message bar (doctor side)
   newMsgBar:    { borderBottom: `1px solid ${webTheme.colors.border}`, backgroundColor: webTheme.colors.surfaceAlt, padding: '10px 12px' },
+  newMsgBarExpanded: { height: 236, boxSizing: 'border-box', overflowY: 'auto' },
   newMsgBtn:    { fontFamily: webTheme.font.sans, fontSize: 13, fontWeight: 600, backgroundColor: webTheme.colors.surface, color: webTheme.colors.text, border: `1px solid ${webTheme.colors.borderStrong}`, borderRadius: 999, padding: '8px 14px', cursor: 'pointer' },
   composeForm:  { display: 'flex', flexDirection: 'column', gap: 5 },
   composeInput: { fontFamily: webTheme.font.sans, fontSize: 14, border: `1px solid ${webTheme.colors.borderStrong}`, backgroundColor: 'rgba(255,255,255,0.82)', color: webTheme.colors.text, borderRadius: 16, padding: '10px 12px', outline: 'none' },
   composeErr:   { fontFamily: webTheme.font.sans, fontSize: 12, color: webTheme.colors.rose },
+  portalThreadHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    padding: '12px 16px',
+    borderBottom: `1px solid ${webTheme.colors.border}`,
+    backgroundColor: webTheme.colors.surfaceAlt,
+  },
+  portalThreadHeaderCopy: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+    minWidth: 0,
+    flex: 1,
+  },
+  portalThreadHeaderTitle: {
+    fontFamily: webTheme.font.sans,
+    fontSize: 14,
+    fontWeight: 700,
+    color: webTheme.colors.text,
+  },
+  portalThreadHeaderSubtitle: {
+    fontFamily: webTheme.font.sans,
+    fontSize: 11,
+    color: webTheme.colors.mutedText,
+  },
   startBtn:     { fontFamily: webTheme.font.sans, fontSize: 13, fontWeight: 600, backgroundColor: webTheme.colors.accent, color: webTheme.colors.white, border: 'none', borderRadius: 999, padding: '9px 14px', cursor: 'pointer', flex: 1 },
   cancelBtn:    { fontFamily: webTheme.font.sans, fontSize: 13, fontWeight: 600, backgroundColor: webTheme.colors.surface, color: webTheme.colors.mutedText, border: `1px solid ${webTheme.colors.borderStrong}`, borderRadius: 999, padding: '9px 12px', cursor: 'pointer' },
   // Empty state

@@ -53,7 +53,7 @@ export default function PatientMessagesPage({
       userName={user.name}
       userId={user.userId}
       roleLabel="Patient"
-      backHref="/patient"
+      backHref="/patient/health"
       peerUserId={searchParams?.peer}
       peerName={searchParams?.peerName}
     />

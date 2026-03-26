@@ -72,12 +72,132 @@ interface DeleteThreadOptions {
 // ── CHAT-005: Urgent message custom components ────────────────────────────────
 
 /**
- * CustomMessage — wraps MessageSimple with a red urgent banner
- * when message.extraData.urgent === true.
+ * CHAT-009: ConsentCard — renders an interactive "I Agree" button for consent_request messages.
+ */
+function ConsentCard({ message, appointmentId }: { message: Record<string, unknown>; appointmentId?: number }) {
+  const [signed, setSigned] = React.useState(false);
+  const [signing, setSigning] = React.useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const extra = (message as any)?.extra_data ?? (message as any)?.extraData ?? {};
+  const consentType: string = extra.consentType ?? 'TELECONSULT';
+  const apptId = appointmentId ?? extra.appointmentId;
+
+  const handleSign = async () => {
+    if (signed || signing || !apptId) return;
+    setSigning(true);
+    try {
+      const res = await fetch('/api/v1/consent/acknowledge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ appointmentId: apptId, consentType }),
+      });
+      if (res.ok) setSigned(true);
+    } catch { /* non-fatal */ }
+    finally { setSigning(false); }
+  };
+
+  return (
+    <div style={{ border: '2px solid #2563EB', borderRadius: 8, padding: 14, margin: '6px 0', backgroundColor: '#EFF6FF', maxWidth: 380 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: 18 }}>📋</span>
+        <span style={{ fontWeight: 700, fontSize: 13, color: '#1D4ED8' }}>Consent Request</span>
+        <span style={{ fontSize: 11, color: '#6B7280', marginLeft: 'auto' }}>{consentType}</span>
+      </div>
+      <p style={{ margin: '0 0 12px', fontSize: 12, color: '#374151', lineHeight: '18px' }}>
+        Your doctor has sent you a consent form. Please review and sign below.
+      </p>
+      {signed ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#16A34A', fontWeight: 700, fontSize: 12 }}>
+          <span>✅</span> Consent signed successfully
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => void handleSign()}
+          disabled={signing}
+          style={{ backgroundColor: '#2563EB', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 18px', fontSize: 12, fontWeight: 700, cursor: signing ? 'not-allowed' : 'pointer', opacity: signing ? 0.7 : 1 }}
+        >
+          {signing ? 'Signing…' : 'I Agree'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * CHAT-013: AppointmentProposalCard — renders Accept / Propose Another Time for follow-up proposals.
+ */
+function AppointmentProposalCard({ message }: { message: Record<string, unknown> }) {
+  const [accepted, setAccepted] = React.useState(false);
+  const [accepting, setAccepting] = React.useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const extra = (message as any)?.extra_data ?? (message as any)?.extraData ?? {};
+  const apptId: number | undefined = extra.appointmentId;
+
+  const handleAccept = async () => {
+    if (!apptId || accepted || accepting) return;
+    setAccepting(true);
+    try {
+      const res = await fetch(`/api/v1/appointments/${apptId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ status: 'SCHEDULED' }),
+      });
+      if (res.ok) setAccepted(true);
+    } catch { /* non-fatal */ }
+    finally { setAccepting(false); }
+  };
+
+  return (
+    <div style={{ border: '2px solid #059669', borderRadius: 8, padding: 14, margin: '6px 0', backgroundColor: '#ECFDF5', maxWidth: 380 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: 18 }}>📅</span>
+        <span style={{ fontWeight: 700, fontSize: 13, color: '#065F46' }}>Follow-Up Proposed</span>
+      </div>
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+      <p style={{ margin: '0 0 12px', fontSize: 12, color: '#374151', lineHeight: '18px' }}>{(message as any).text}</p>
+      {accepted ? (
+        <div style={{ color: '#16A34A', fontWeight: 700, fontSize: 12 }}>✅ Appointment confirmed!</div>
+      ) : (
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            type="button"
+            onClick={() => void handleAccept()}
+            disabled={accepting}
+            style={{ backgroundColor: '#059669', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 16px', fontSize: 12, fontWeight: 700, cursor: accepting ? 'not-allowed' : 'pointer' }}
+          >
+            {accepting ? 'Confirming…' : 'Accept'}
+          </button>
+          <a href="/patient/book" style={{ backgroundColor: 'transparent', color: '#059669', border: '1.5px solid #059669', borderRadius: 6, padding: '7px 16px', fontSize: 12, fontWeight: 700, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+            Propose Another Time
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * CustomMessage — wraps MessageSimple with rich card renderers for typed messages:
+ * - urgent → red urgent banner
+ * - consent_request → ConsentCard with "I Agree" button
+ * - appointment_proposal → AppointmentProposalCard with Accept CTA
  */
 const CustomMessage = (props: MessageUIComponentProps) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const isUrgent = (props.message as any)?.extraData?.urgent === true;
+  const msg = props.message as any;
+  const extraType: string = msg?.extra_data?.type ?? msg?.extraData?.type ?? '';
+  const isUrgent = msg?.extraData?.urgent === true;
+
+  if (extraType === 'consent_request') {
+    return <ConsentCard message={msg} />;
+  }
+  if (extraType === 'appointment_proposal') {
+    return <AppointmentProposalCard message={msg} />;
+  }
+
   return (
     <div style={isUrgent ? { borderLeft: '4px solid red', paddingLeft: 8 } : {}}>
       {isUrgent && <span style={{ color: 'red', fontSize: 11 }}>🚨 URGENT</span>}

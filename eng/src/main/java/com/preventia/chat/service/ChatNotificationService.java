@@ -372,6 +372,171 @@ public class ChatNotificationService {
     }
 
     // -------------------------------------------------------------------------
+    // SPRINT-09 CHAT-009: Consent request via chat
+    // -------------------------------------------------------------------------
+
+    /**
+     * CHAT-009: Send an interactive consent request message to the patient's chat channel.
+     * Message carries extraData.type = "consent_request" so the frontend can render
+     * a custom card with an "I Agree" button.
+     *
+     * @param doctorId    the requesting doctor's user ID
+     * @param recipientId the patient's user ID
+     * @param consentType e.g. "TELECONSULT", "RECORDING"
+     */
+    public void sendConsentRequest(Long doctorId, Long recipientId, String consentType) {
+        if (isStub()) {
+            log.info("[ChatNotification] STUB — consent request type={} patient={}", consentType, recipientId);
+            return;
+        }
+
+        String channelId = buildChannelId(doctorId, recipientId);
+        try {
+            String jwt = buildBotJwt();
+            String url = "https://chat.stream-io-api.com/channels/messaging/" + channelId + "/message";
+
+            String text = "📋 *Consent Request — " + consentType + "*\n\n" +
+                "Your doctor has sent you a consent form to review and sign.\n\n" +
+                "Please tap *I Agree* below to provide your digital consent. " +
+                "You can ask your doctor if you have any questions.";
+
+            Map<String, Object> extraData = new HashMap<>();
+            extraData.put("type",        "consent_request");
+            extraData.put("consentType", consentType);
+
+            Map<String, Object> message = new HashMap<>();
+            message.put("text",       text);
+            message.put("user_id",    BOT_USER_ID);
+            message.put("extra_data", extraData);
+
+            Map<String, Object> body = Map.of("message", message);
+
+            restClient.post()
+                .uri(url)
+                .header("Content-Type", "application/json")
+                .header("Authorization", jwt)
+                .header("stream-auth-type", "jwt")
+                .body(body)
+                .retrieve()
+                .toBodilessEntity();
+
+            log.info("[ChatNotification] Consent request sent: type={} doctor={} patient={}", consentType, doctorId, recipientId);
+        } catch (Exception e) {
+            log.warn("[ChatNotification] Failed to send consent request: {}", e.getMessage());
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // SPRINT-09 CONSULT-005: Sponsor live update during active consultation
+    // -------------------------------------------------------------------------
+
+    /**
+     * CONSULT-005: Send a live update from the doctor to the sponsor channel during
+     * an active consultation. Message is tagged with liveUpdate=true for UI differentiation.
+     *
+     * @param sponsorId    the sponsor's user ID
+     * @param doctorId     the doctor's user ID
+     * @param appointmentId the active appointment ID
+     * @param updateText   the update text (from quick template or custom input)
+     */
+    public void sendSponsorLiveUpdate(Long sponsorId, Long doctorId,
+                                      Long appointmentId, String updateText) {
+        if (isStub()) {
+            log.info("[ChatNotification] STUB — live update for sponsor={} appt={}", sponsorId, appointmentId);
+            return;
+        }
+
+        String channelId = buildSponsorDoctorChannelId(sponsorId, doctorId);
+        try {
+            String jwt = buildBotJwt();
+            String url = "https://chat.stream-io-api.com/channels/messaging/" + channelId + "/message";
+
+            Map<String, Object> extraData = new HashMap<>();
+            extraData.put("type",         "live_update");
+            extraData.put("liveUpdate",   true);
+            extraData.put("appointmentId", appointmentId);
+
+            Map<String, Object> message = new HashMap<>();
+            message.put("text",       "🔴 *Live Update:* " + updateText);
+            message.put("user_id",    BOT_USER_ID);
+            message.put("extra_data", extraData);
+
+            Map<String, Object> body = Map.of("message", message);
+
+            restClient.post()
+                .uri(url)
+                .header("Content-Type", "application/json")
+                .header("Authorization", jwt)
+                .header("stream-auth-type", "jwt")
+                .body(body)
+                .retrieve()
+                .toBodilessEntity();
+
+            log.info("[ChatNotification] Live update sent: appt={} sponsor={}", appointmentId, sponsorId);
+        } catch (Exception e) {
+            log.warn("[ChatNotification] Failed to send live update: {}", e.getMessage());
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // SPRINT-09 CHAT-013: Follow-up appointment booking card
+    // -------------------------------------------------------------------------
+
+    /**
+     * CHAT-013: Send a follow-up appointment booking card to the patient's chat channel.
+     * Message carries extraData.type = "appointment_proposal" so the frontend can render
+     * Accept / Propose Another Time buttons.
+     *
+     * @param doctorId       the doctor's user ID
+     * @param recipientId    the patient's user ID
+     * @param appointmentId  the newly proposed appointment's DB ID
+     * @param startTimeIst   formatted start time in IST
+     * @param doctorName     doctor's display name
+     */
+    public void sendFollowUpProposal(Long doctorId, Long recipientId,
+                                      Long appointmentId, String startTimeIst, String doctorName) {
+        if (isStub()) {
+            log.info("[ChatNotification] STUB — follow-up proposal appt={} patient={}", appointmentId, recipientId);
+            return;
+        }
+
+        String channelId = buildChannelId(doctorId, recipientId);
+        try {
+            String jwt = buildBotJwt();
+            String url = "https://chat.stream-io-api.com/channels/messaging/" + channelId + "/message";
+
+            String text = "📅 *Follow-Up Appointment Proposed*\n\n" +
+                "Dr. " + doctorName + " has proposed a follow-up consultation:\n\n" +
+                "📆 " + startTimeIst + " IST\n\n" +
+                "Tap *Accept* to confirm, or reply to propose another time.";
+
+            Map<String, Object> extraData = new HashMap<>();
+            extraData.put("type",          "appointment_proposal");
+            extraData.put("appointmentId", appointmentId);
+
+            Map<String, Object> message = new HashMap<>();
+            message.put("text",       text);
+            message.put("user_id",    BOT_USER_ID);
+            message.put("extra_data", extraData);
+
+            Map<String, Object> body = Map.of("message", message);
+
+            restClient.post()
+                .uri(url)
+                .header("Content-Type", "application/json")
+                .header("Authorization", jwt)
+                .header("stream-auth-type", "jwt")
+                .body(body)
+                .retrieve()
+                .toBodilessEntity();
+
+            log.info("[ChatNotification] Follow-up proposal sent: appt={} patient={}", appointmentId, recipientId);
+        } catch (Exception e) {
+            log.warn("[ChatNotification] Failed to send follow-up proposal: {}", e.getMessage());
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // SPRINT-09 CHAT-012: SOAP summary to patient on consultation lock
     // -------------------------------------------------------------------------
 

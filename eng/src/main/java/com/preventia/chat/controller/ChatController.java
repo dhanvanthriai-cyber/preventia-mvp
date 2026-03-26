@@ -203,4 +203,42 @@ public class ChatController {
         return ResponseEntity.ok(Map.of("status", "sent", "channelId",
             "sponsor-" + appt.getSponsorId() + "__doctor-" + appt.getDoctorId()));
     }
+
+    // -------------------------------------------------------------------------
+    // CONSULT-005: Sponsor live update during active consultation
+    // -------------------------------------------------------------------------
+
+    /**
+     * POST /api/v1/chat/live-update/{appointmentId}
+     *
+     * Doctor sends a live status update to the sponsor channel during an
+     * active consultation. Message is tagged with liveUpdate=true for
+     * UI differentiation (🔴 LIVE badge on sponsor side).
+     *
+     * Body: { "update": "Taking medical history" }
+     */
+    @PostMapping("/live-update/{appointmentId}")
+    @PreAuthorize("hasRole('DOCTOR')")
+    public ResponseEntity<Map<String, String>> sendLiveUpdate(
+            @PathVariable Long appointmentId,
+            @RequestBody Map<String, String> body) {
+
+        Appointment appt = appointmentRepository.findById(appointmentId)
+            .orElseThrow(() -> new EntityNotFoundException("Appointment not found: " + appointmentId));
+
+        if (appt.getSponsorId() == null) {
+            return ResponseEntity.ok(Map.of("status", "no_sponsor"));
+        }
+
+        String updateText = body.getOrDefault("update", "");
+        if (updateText.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "update must not be blank"));
+        }
+
+        chatNotificationService.sendSponsorLiveUpdate(
+            appt.getSponsorId(), appt.getDoctorId(), appointmentId, updateText
+        );
+
+        return ResponseEntity.ok(Map.of("status", "sent"));
+    }
 }

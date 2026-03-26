@@ -43,8 +43,19 @@ interface Props {
   doctorToken:   string;   // may be recipientToken on the patient side
   patientName:   string;
   peerUserId?:   string;   // Stream userId of the peer (doctor or patient)
+  /** CONSULT-005: sponsorId signals a sponsor is linked — shows live update panel for doctors */
+  sponsorId?:    number;
   onLocked:      () => void;
 }
+
+const LIVE_UPDATE_TEMPLATES = [
+  'Examination started',
+  'Taking medical history',
+  'Reviewing medications',
+  'Prescribing medication',
+  'Follow-up needed',
+  'Consultation complete',
+];
 
 export default function ConsultationRoom({
   appointmentId,
@@ -52,6 +63,7 @@ export default function ConsultationRoom({
   doctorToken,
   patientName,
   peerUserId,
+  sponsorId,
   onLocked,
 }: Props) {
   // The hook attaches the Daily iframe directly to this div
@@ -72,6 +84,31 @@ export default function ConsultationRoom({
 
   // In-call chat overlay toggle (VIDEO-001)
   const [chatOpen, setChatOpen] = useState(false);
+
+  // CONSULT-005: Live updates to sponsor
+  const [liveUpdateInput, setLiveUpdateInput] = useState('');
+  const [liveUpdateSending, setLiveUpdateSending] = useState(false);
+  const [liveUpdateSent, setLiveUpdateSent] = useState<string | null>(null);
+
+  const sendLiveUpdate = async (text: string) => {
+    if (!text.trim() || liveUpdateSending) return;
+    setLiveUpdateSending(true);
+    try {
+      await fetch(`/api/v1/chat/live-update/${appointmentId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ update: text }),
+      });
+      setLiveUpdateSent(text);
+      setLiveUpdateInput('');
+      setTimeout(() => setLiveUpdateSent(null), 3000);
+    } catch {
+      // Non-fatal
+    } finally {
+      setLiveUpdateSending(false);
+    }
+  };
 
   // SOAP Notes state
   const [soapS, setSoapS] = useState('');
@@ -288,6 +325,49 @@ export default function ConsultationRoom({
             )}
           </div>
 
+          {/* CONSULT-005: Live updates to sponsor panel */}
+          {roomStatus === 'ACTIVE' && sponsorId != null && (
+            <div style={styles.liveUpdatePanel}>
+              <div style={styles.liveUpdateHeader}>
+                <span style={styles.liveDot}>●</span>
+                <span style={styles.liveLabel}>Live Updates to Sponsor</span>
+                {liveUpdateSent && (
+                  <span style={styles.liveSentConfirm}>✓ Sent: {liveUpdateSent}</span>
+                )}
+              </div>
+              <div style={styles.liveTemplates}>
+                {LIVE_UPDATE_TEMPLATES.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    style={styles.liveTemplateBtn}
+                    disabled={liveUpdateSending}
+                    onClick={() => void sendLiveUpdate(t)}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+              <div style={styles.liveCustomRow}>
+                <input
+                  style={styles.liveCustomInput}
+                  placeholder="Custom update…"
+                  value={liveUpdateInput}
+                  onChange={(e) => setLiveUpdateInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') void sendLiveUpdate(liveUpdateInput); }}
+                />
+                <button
+                  type="button"
+                  style={styles.liveSendBtn}
+                  disabled={liveUpdateSending || !liveUpdateInput.trim()}
+                  onClick={() => void sendLiveUpdate(liveUpdateInput)}
+                >
+                  {liveUpdateSending ? '…' : '↑'}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* In-call chat overlay (VIDEO-001) */}
           {chatOpen && roomStatus === 'ACTIVE' && peerUserId && (
             <div style={styles.chatOverlay}>
@@ -378,4 +458,15 @@ const styles: Record<string, React.CSSProperties> = {
   muteBurstBtn: { fontFamily: 'monospace', fontSize: 12, fontWeight: 700, backgroundColor: '#FF6B00', color: '#fff', border: '2px solid #111', padding: '8px 18px', cursor: 'pointer' },
   signCompleteBtn: { fontFamily: 'monospace', fontSize: 12, fontWeight: 700, backgroundColor: '#8B0000', color: '#fff', border: '2px solid #8B0000', padding: '8px 20px', cursor: 'pointer', marginLeft: 'auto' },
   chatOverlay: { borderTop: '2px solid #111', backgroundColor: '#F9F9F9' },
+  // CONSULT-005: Live update panel
+  liveUpdatePanel:   { borderTop: '2px solid #111', backgroundColor: '#0a0a0a', padding: '10px 14px', display: 'flex', flexDirection: 'column' as const, gap: 8 },
+  liveUpdateHeader:  { display: 'flex', alignItems: 'center', gap: 8 },
+  liveDot:           { color: '#EF4444', fontSize: 14, lineHeight: 1 },
+  liveLabel:         { fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: '#fff', textTransform: 'uppercase' as const, letterSpacing: 1 },
+  liveSentConfirm:   { fontFamily: 'monospace', fontSize: 10, color: '#22C55E', marginLeft: 'auto' },
+  liveTemplates:     { display: 'flex', flexWrap: 'wrap' as const, gap: 6 },
+  liveTemplateBtn:   { fontFamily: 'monospace', fontSize: 10, fontWeight: 700, backgroundColor: 'transparent', color: '#ccc', border: '1px solid #444', padding: '4px 10px', cursor: 'pointer', borderRadius: 4 },
+  liveCustomRow:     { display: 'flex', gap: 6 },
+  liveCustomInput:   { fontFamily: 'monospace', fontSize: 12, flex: 1, backgroundColor: '#1a1a1a', color: '#fff', border: '1px solid #444', borderRadius: 4, padding: '6px 10px', outline: 'none' },
+  liveSendBtn:       { fontFamily: 'monospace', fontSize: 14, fontWeight: 700, backgroundColor: '#EF4444', color: '#fff', border: 'none', borderRadius: 4, padding: '6px 14px', cursor: 'pointer' },
 };

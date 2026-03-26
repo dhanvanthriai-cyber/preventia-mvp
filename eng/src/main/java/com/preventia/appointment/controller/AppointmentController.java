@@ -293,4 +293,47 @@ public class AppointmentController {
         }
         return "";
     }
+
+    // -------------------------------------------------------------------------
+    // CHAT-013: Propose follow-up appointment via chat
+    // -------------------------------------------------------------------------
+
+    /**
+     * POST /api/v1/appointments/propose
+     *
+     * Doctor proposes a follow-up appointment from the chat interface.
+     * Creates the appointment (same flow as createAppointment) and sends
+     * a booking card to the patient's chat channel.
+     *
+     * Body: same as CreateAppointmentRequest
+     */
+    @PostMapping("/api/v1/appointments/propose")
+    @PreAuthorize("hasRole('DOCTOR')")
+    public ResponseEntity<Map<String, Object>> proposeFollowUp(
+            @RequestBody com.preventia.appointment.dto.CreateAppointmentRequest request,
+            org.springframework.security.core.Authentication authentication) {
+
+        var response = appointmentService.createAppointment(request);
+
+        // Send booking card to patient channel
+        String doctorName = request.doctorName() != null ? request.doctorName() : "Your Doctor";
+        String startTimeIst = new java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a"){{
+            setTimeZone(java.util.TimeZone.getTimeZone("Asia/Kolkata"));
+        }}.format(java.util.Date.from(request.startTime().toInstant()));
+
+        chatNotificationService.sendFollowUpProposal(
+            request.doctorId(),
+            request.recipientId(),
+            response.id(),
+            startTimeIst,
+            doctorName
+        );
+
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
+            .body(Map.of(
+                "appointmentId", response.id(),
+                "status",        "proposed",
+                "startTime",     request.startTime().toString()
+            ));
+    }
 }

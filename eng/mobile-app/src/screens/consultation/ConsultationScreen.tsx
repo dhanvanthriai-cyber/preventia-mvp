@@ -47,7 +47,7 @@ export const ConsultationScreen: React.FC<ConsultationScreenProps> = ({
 
   const { join, leave, participantCount, isJoined, error } = useDailySession({
     roomUrl,
-    token,
+    meetingToken: token,
     appointmentId,
   });
 

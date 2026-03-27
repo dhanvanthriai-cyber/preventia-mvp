@@ -37,6 +37,15 @@ import {
   MessageList,
   MessageInput,
 } from 'stream-chat-react-native';
+
+// stream-chat (8.60) and stream-chat-react-native's bundled stream-chat (8.46)
+// have diverged generics. Cast helpers let us bridge the gap without downgrading.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const AnyChat = Chat as any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const AnyChannel = Channel as any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const AnyChannelList = ChannelList as any;
 import { Colors, Spacing, Typography } from '../../theme/theme';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -177,8 +186,8 @@ export function PatientChatScreen() {
   if (activeChannel && clientRef.current) {
     return (
       <OverlayProvider>
-        <Chat client={clientRef.current}>
-          <Channel channel={activeChannel}>
+        <AnyChat client={clientRef.current}>
+          <AnyChannel channel={activeChannel}>
             <View style={{ flex: 1 }}>
               <View style={s.header}>
                 <Text style={s.headerTitle} onPress={() => setActiveChannel(null)}>
@@ -188,8 +197,8 @@ export function PatientChatScreen() {
               <MessageList />
               <MessageInput />
             </View>
-          </Channel>
-        </Chat>
+          </AnyChannel>
+        </AnyChat>
       </OverlayProvider>
     );
   }
@@ -198,16 +207,16 @@ export function PatientChatScreen() {
   if (ready && clientRef.current) {
     return (
       <OverlayProvider>
-        <Chat client={clientRef.current}>
+        <AnyChat client={clientRef.current}>
           <SafeAreaView style={s.safe}>
             <View style={s.header}><Text style={s.headerTitle}>Messages</Text></View>
-            <ChannelList
+            <AnyChannelList
               filters={channelFilters}
               sort={channelSort}
               onSelect={onSelectChannel}
             />
           </SafeAreaView>
-        </Chat>
+        </AnyChat>
       </OverlayProvider>
     );
   }

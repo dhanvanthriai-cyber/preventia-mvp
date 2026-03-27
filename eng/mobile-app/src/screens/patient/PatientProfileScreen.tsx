@@ -99,6 +99,7 @@ const styles = StyleSheet.create({
   content: { padding: Spacing.md },
   avatarRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 24 },
   avatar: {
+    ...Borders.standard,
     width: 64,
     height: 64,
     borderRadius: 32,
@@ -106,7 +107,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
-    ...Borders.standard,
   },
   avatarText: { color: Colors.white, fontSize: 28, fontWeight: '700' },
   name: { ...Typography.subheading, fontWeight: '700' },

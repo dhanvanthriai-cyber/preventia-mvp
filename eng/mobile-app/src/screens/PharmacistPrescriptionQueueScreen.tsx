@@ -304,7 +304,7 @@ export const PharmacistPrescriptionQueueScreen: React.FC = () => {
         title="Prescription Queue"
         subtitle="Sorted by urgency · SLA: 4 hours"
         value={`${queue.filter(i => i.prescriptionStatus === 'PENDING_VERIFICATION').length} pending`}
-        variant={queue.some(i => getSlaRemainingMs(i.prescriptionUploadedAt) <= 0) ? 'critical' : 'primary'}
+        urgency={queue.some(i => getSlaRemainingMs(i.prescriptionUploadedAt) <= 0) ? 'critical' : 'normal'}
         onPress={() => fetchQueue(true)}
       />
 
